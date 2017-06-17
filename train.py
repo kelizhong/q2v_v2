@@ -72,13 +72,15 @@ tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
 tf.app.flags.DEFINE_integer("issync", 0, "")
 
 FLAGS = tf.app.flags.FLAGS
+ps_hosts = FLAGS.ps_hosts.split(",")
+worker_hosts = FLAGS.worker_hosts.split(",")
 
 
 def create_model(session, forward_only):
     """Create SSE model and initialize or load parameters in session."""
     model = Q2VModel(FLAGS.max_seq_length, FLAGS.max_vocabulary_size, FLAGS.embedding_size, FLAGS.encoding_size,
                      FLAGS.num_layers, FLAGS.src_cell_size, FLAGS.tgt_cell_size,
-                     FLAGS.batch_size, FLAGS.learning_rate, FLAGS.max_gradient_norm)
+                     FLAGS.batch_size, FLAGS.learning_rate, FLAGS.max_gradient_norm, worker_hosts, FLAGS.issync)
 
     ckpt = tf.train.get_checkpoint_state(FLAGS.model_dir)
     if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
@@ -125,8 +127,7 @@ def read_train_data(train_data_path, vocabulary):
 
 
 def train_1(checkpoint_dir):
-    ps_hosts = FLAGS.ps_hosts.split(",")
-    worker_hosts = FLAGS.worker_hosts.split(",")
+
     task_index = FLAGS.task_index
     job_name = FLAGS.job_name
     gpu = FLAGS.gpu

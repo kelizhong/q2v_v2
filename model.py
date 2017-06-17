@@ -1,10 +1,11 @@
+# coding=utf-8
 import tensorflow as tf
 import numpy as np
 
 
 class Q2VModel(object):
     def __init__(self, max_seq_length, vocab_size, word_embed_size, seq_embed_size, num_layers, src_cell_size,
-                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, use_lstm=True):
+                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, worker_hosts, issync=0, use_lstm=True):
         self.max_seq_length = max_seq_length
         self.vocab_size = vocab_size
         self.word_embed_size = word_embed_size
@@ -18,6 +19,8 @@ class Q2VModel(object):
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
         self.source_partitions = tf.placeholder(tf.int32, [None])
         self.target_partitions = tf.placeholder(tf.int32, [None])
+        self.issync = issync
+        self.worker_hosts = worker_hosts
         self.use_lstm = use_lstm
 
         # List of operations to be called after each training step, see
@@ -47,7 +50,7 @@ class Q2VModel(object):
         self._def_network()
         self._def_loss()
         self._def_optimize()
-        self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
+        #self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
 
     def _def_network(self):
         # Build shared encoder
@@ -153,14 +156,23 @@ class Q2VModel(object):
         """
 
         # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-        optimizer = tf.train.AdagradOptimizer(self.learning_rate)
+        optimizer = tf.train.AdadeltaOptimizer(self.learning_rate)
 
-        tvars = tf.trainable_variables()
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), self.max_gradient_norm)
-        self.train = optimizer.apply_gradients(zip(grads, tvars), global_step=self.global_step)  # tutorial version??
-
-        # #TODO: try different optimizer to see if any improvements
-        # self.train = optimizer.minimize(self.loss, global_step=self.global_step, gate_gradients=optimizer.GATE_NONE) #default version?
+        grads_and_vars = optimizer.compute_gradients(self.loss)
+        if self.issync == 1:
+            rep_op = tf.train.SyncReplicasOptimizer(optimizer,
+                                                    replicas_to_aggregate=len(
+                                                        self.worker_hosts),
+                                                    total_num_replicas=len(
+                                                        self.worker_hosts),
+                                                    use_locking=True)
+            self.train = rep_op.apply_gradients(grads_and_vars,
+                                                   global_step=self.global_step)
+            self.init_token_op = rep_op.get_init_tokens_op()
+            self.chief_queue_runner = rep_op.get_chief_queue_runner()
+        else:
+            self.train = optimizer.apply_gradients(grads_and_vars,
+                                                      global_step=self.global_step)
 
         self._add_post_train_ops()
 
