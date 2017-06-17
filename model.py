@@ -47,12 +47,13 @@ class Q2VModel(object):
         self._def_network()
         self._def_loss()
         self._def_optimize()
-        self.saver = tf.train.Saver(tf.all_variables(), max_to_keep=20)
+        self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
 
     def _def_network(self):
         # Build shared encoder
         with tf.variable_scope('shared_encoder'):
             # TODO: need play with forgetGate and peeholes here
+            # for tf1.1, tf.contrib.rnn.LSTMCell
             if self.use_lstm:
                 src_single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
             else:
