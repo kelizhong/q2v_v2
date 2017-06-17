@@ -55,13 +55,16 @@ class Q2VModel(object):
             # TODO: need play with forgetGate and peeholes here
             # for tf1.1, tf.contrib.rnn.LSTMCell
             if self.use_lstm:
-                src_single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
+                # src_single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
+                src_single_cell = tf.contrib.rnn.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
             else:
-                src_single_cell = tf.nn.rnn_cell.GRUCell(self.src_cell_size)
+                # src_single_cell = tf.nn.rnn_cell.GRUCell(self.src_cell_size)
+                src_single_cell = tf.contrib.rnn.GRUCell(self.src_cell_size)
 
             src_cell = src_single_cell
             if self.num_layers > 1:
-                src_cell = tf.nn.rnn_cell.MultiRNNCell([src_single_cell] * self.num_layers)
+                # src_cell = tf.nn.rnn_cell.MultiRNNCell([src_single_cell] * self.num_layers)
+                src_cell = tf.contrib.rnn.MultiRNNCell([src_single_cell] * self.num_layers)
 
             # compute source sequence related tensors
             src_output, _ = tf.nn.dynamic_rnn(src_cell, self.src_input_distributed, sequence_length=self._src_lens,

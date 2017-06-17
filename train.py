@@ -1,4 +1,13 @@
 # coding=utf-8
+"""
+Change the hardcoded host urls below with your own hosts.
+Run like this:
+pc-01$ python example.py --job_name="ps" --task_index=0
+pc-02$ python example.py --job_name="worker" --task_index=0
+pc-03$ python example.py --job_name="worker" --task_index=1
+pc-04$ python example.py --job_name="worker" --task_index=2
+"""
+
 from __future__ import print_function
 import os
 import time
@@ -8,6 +17,8 @@ import math
 import tensorflow as tf
 from data_util import create_vocabulary, sentence_to_padding_tokens, initialize_vocabulary
 from model import Q2VModel
+
+
 
 # cluster specification
 parameter_servers = ["pc-01:2222"]
@@ -48,6 +59,8 @@ tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10,
 
 tf.app.flags.DEFINE_boolean("embeddingMode", False,
                             "Set to True to generate embedding vectors file for entries in targetIDs file.")
+tf.app.flags.DEFINE_string("gpu", None, "specify the gpu to use")
+
 
 # For distributed
 tf.app.flags.DEFINE_string("ps_hosts", "0.0.0.0:2221",
@@ -111,11 +124,12 @@ def read_train_data(train_data_path, vocabulary):
     return data_set, int(math.floor(counter / FLAGS.batch_size))
 
 
-def train_1(checkpoint_dir, gpu=""):
+def train_1(checkpoint_dir):
     ps_hosts = FLAGS.ps_hosts.split(",")
     worker_hosts = FLAGS.worker_hosts.split(",")
     task_index = FLAGS.task_index
     job_name = FLAGS.job_name
+    gpu = FLAGS.gpu
     if job_name == "single":
         master = ""
     else:
