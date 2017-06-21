@@ -156,7 +156,7 @@ def sentence_to_padding_tokens(sentence, vocabulary, max_seq_length, tokenizer=N
         print(
             'Error Deteced!!! Source input seq length is:%s. \n Excced current MAX_SEQ_LENTH of %s. Try to increase limit!!!!' %
             (str(tokens_len), str(max_seq_length)))
-        return []
+        return 0, []
 
     tokens += [PAD_ID] * (max_seq_length - tokens_len)
 
