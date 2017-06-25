@@ -3,15 +3,17 @@ import logbook as logging
 from utils.data_util import basic_tokenizer
 from utils.pickle_util import save_obj_pickle, load_pickle_object
 from collections import Counter
+from exception.resource_exception import ResourceNotFoundError
 
 
 class VocabularyBase(object):
-    def __init__(self, vocabulary_data_dir, top_words=40000, special_words=dict(), words_freq_counter_name="words_freq_counter"):
+    def __init__(self, vocabulary_data_dir, top_words=40000, special_words=dict(),
+                 words_freq_counter_name="words_freq_counter"):
         self.vocabulary_data_dir = vocabulary_data_dir
         self.top_words = top_words
         self.special_words = special_words
         self.words_freq_counter_path = os.path.join(self.vocabulary_data_dir, words_freq_counter_name)
-        self.vocab_path = os.path.join(self.vocabulary_data_dir, "vocab_%d".format(top_words))
+        self.vocab_path = os.path.join(self.vocabulary_data_dir, "vocab_%d" % top_words)
 
     @property
     def special_words_size(self):
@@ -29,35 +31,46 @@ class VocabularyBase(object):
              special_words like <unk>, <s>, </s>
         Returns
         -------
-            vocabulary
+            vocabulary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            9322221111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111-=
+
         """
 
-        words_freq_counter = load_pickle_object(self.words_freq_counter_path)
-        words_freq_list = words_freq_counter.most_common(self.top_words)
+        if os.path.isfile(self.vocab_path):
+            vocab = load_pickle_object(self.vocab_path)
+        elif os.path.isfile(self.words_freq_counter_path):
+            words_freq_counter = load_pickle_object(self.words_freq_counter_path)
+            words_freq_list = words_freq_counter.most_common(self.top_words)
 
-        words_num = len(words_freq_list)
-        special_words_num = self.special_words_size
+            words_num = len(words_freq_list)
+            special_words_num = self.special_words_size
 
-        if words_num <= special_words_num:
-            raise ValueError("the size of total words must be larger than the size of special_words")
+            if words_num <= special_words_num:
+                raise ValueError("the size of total words must be larger than the size of special_words")
 
-        if self.top_words <= special_words_num:
-            raise ValueError("the value of most_common_words_num must be larger "
-                             "than the size of special_words")
+            if self.top_words <= special_words_num:
+                raise ValueError("the value of most_common_words_num must be larger "
+                                 "than the size of special_words")
 
-        vocab = dict()
-        vocab.update(self.special_words)
-        for word, _ in words_freq_list:
-            if len(vocab) >= self.top_words:
-                break
-            if word not in self.special_words:
-                vocab[word] = len(vocab)
+            vocab = dict()
+            vocab.update(self.special_words)
+            for word, _ in words_freq_list:
+                if len(vocab) >= self.top_words:
+                    break
+                if word not in self.special_words:
+                    vocab[word] = len(vocab)
+            save_obj_pickle(vocab, self.vocab_path, True)
+        else:
+            raise ResourceNotFoundError(
+                "Failed to load vocabulary resource, please check vocabulary file %s or words_freq_counter %s" % (
+                self.vocab_path, self.words_freq_counter_path))
         return vocab
 
 
 class VocabularyFromLocalFile(VocabularyBase):
-    def __init__(self, vocabulary_data_dir, top_words=40000, special_words=dict(), words_freq_counter_name="words_freq_counter"):
-        super(VocabularyFromLocalFile, self).__init__(vocabulary_data_dir, top_words, special_words, words_freq_counter_name)
+    def __init__(self, vocabulary_data_dir, top_words=40000, special_words=dict(),
+                 words_freq_counter_name="words_freq_counter"):
+        super(VocabularyFromLocalFile, self).__init__(vocabulary_data_dir, top_words, special_words,
+                                                      words_freq_counter_name)
 
     def build_words_frequency_counter(self, raw_data_path, tokenizer=None):
         """

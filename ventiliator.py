@@ -26,8 +26,8 @@ def parse_args():
 
     q2v_aksis_ventiliator_parser.add_argument('data_dir', type=str,
                                               help='the file name of the encoder input for training')
-    q2v_aksis_ventiliator_parser.add_argument('vocabulary_path',
-                                              default=os.path.join(os.getcwd(), 'data', 'vocabulary', 'vocab.pkl'),
+    q2v_aksis_ventiliator_parser.add_argument('--vocabulary-data-dir',
+                                              default=os.path.join(os.getcwd(), 'data', 'vocabulary'),
                                               type=str,
                                               help='vocabulary with he most common words')
     q2v_aksis_ventiliator_parser.add_argument('-ap', '--action-patterns', nargs=2, action=AppendTupleWithoutDefault,
@@ -37,7 +37,7 @@ def parse_args():
     q2v_aksis_ventiliator_parser.add_argument('--port', type=str, help='zmq port')
     q2v_aksis_ventiliator_parser.add_argument('-bs', '--batch-size', default=128, type=int,
                                               help='batch size for each databatch')
-    q2v_aksis_ventiliator_parser.add_argument('--top-words', default=40000, type=int,
+    q2v_aksis_ventiliator_parser.add_argument('--top-words', default=sys.maxsize, type=int,
                                               help='the max sample num for training')
     q2v_aksis_ventiliator_parser.add_argument('--worker-num', default=1, type=int,
                                               help='number of parser worker')
@@ -61,6 +61,6 @@ if __name__ == "__main__":
     if args.action == 'q2v_aksis_ventiliator':
         from data_io.distribute_stream.aksis_data_pipeline import AksisDataPipeline
 
-        p = AksisDataPipeline(args.data_dir, args.vocabulary_path, args.top_words, args.action_patterns,
+        p = AksisDataPipeline(args.data_dir, args.vocabulary_data_dir, args.top_words, args.action_patterns,
                               args.batch_size, worker_num=args.worker_num)
         p.start_all()

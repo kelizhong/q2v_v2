@@ -1,11 +1,14 @@
-import os
-import sys
 import argparse
-import logbook as logging
+import os
 import signal
-from vocabulary.vocab import Vocab
+import sys
+
+import logbook as logging
+
 from argparser.customArgType import FileType
+from config.config import project_dir
 from utils.data_util import aksis_sentence_gen
+from vocabulary.vocab import VocabFromZMQ, VocabularyFromCustomStringTrigram
 
 
 def parse_args():
@@ -23,17 +26,19 @@ def parse_args():
 
     q2v_vocab_parser.add_argument('--overwrite', action='store_true', help='overwrite earlier created files, also forces the\
                         program not to reuse count files')
-    q2v_vocab_parser.add_argument('-vf', '--vocab-file',
+    q2v_vocab_parser.add_argument('-vf', '--vocab-data-dir',
                                   type=FileType,
-                                  default=os.path.join(os.path.dirname(__file__), 'data', 'vocabulary', 'vocab.pkl'),
+                                  default=os.path.join(project_dir, 'data', 'vocabulary'),
                                   help='the file with the words which are the most command words in the corpus')
     q2v_vocab_parser.add_argument('-w', '--workers-num',
                                   type=int,
                                   default=10,
                                   help='the file with the words which are the most command words in the corpus')
-    q2v_vocab_parser.add_argument('files', nargs='+',
+    q2v_vocab_parser.add_argument('-files', nargs='+',
                                   help='the corpus input files')
 
+    q2v_vocab_parser.add_argument('-string', type=str, default='abcdefghijklmnopqrstuvwxyz1234567890#.&\\',
+                                  help='the corpus input files')
     return parser.parse_args()
 
 
@@ -54,6 +59,9 @@ if __name__ == "__main__":
     setup_logger()
     signal.signal(signal.SIGINT, signal_handler)
 
-    vocab = Vocab(args.files, args.vocab_file, workers_num=args.workers_num, sentence_gen=aksis_sentence_gen,
-                  overwrite=args.overwrite)
-    vocab.create_dictionary()
+    if args.files:
+        VocabFromZMQ(vocabulary_data_dir=args.vocab_data_dir, workers_num=args.workers_num,
+                         sentence_gen=aksis_sentence_gen,
+                         overwrite=args.overwrite).build_words_frequency_counter(args.files)
+    else:
+        VocabularyFromCustomStringTrigram(vocabulary_data_dir=args.vocab_data_dir).build_words_frequency_counter(args.string)

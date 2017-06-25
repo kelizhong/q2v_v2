@@ -50,4 +50,4 @@ if __name__ == '__main__':
     # pylint: disable=invalid-name
     receiver = AksisDataReceiver(local_ip(), port=5558)
     for x in receiver:
-        print(x)
+        print(x[1])

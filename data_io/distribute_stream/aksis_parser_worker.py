@@ -7,9 +7,8 @@ import pickle
 # pylint: disable=ungrouped-imports
 import zmq
 from utils.decorator_util import memoized
-from utils.data_util import tokenize, sentence_to_padding_tokens
-from utils.data_util import load_vocabulary_from_pickle
-from common.constant import special_words
+from utils.data_util import trigram_sentence_to_padding_index
+from vocabulary.vocab import VocabularyFromLocalFile, VocabularyFromCustomStringTrigram
 from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.decorators import socket
@@ -32,16 +31,18 @@ class AksisParserWorker(Process):
             Port for the outbound traffic
     """
 
-    def __init__(self, ip, vocabulary_path, top_words, frontend_port=5556, backend_port=5557,
+    def __init__(self, ip, vocabulary_data_dir, top_words, source_maxlen=50, target_maxlen=150, frontend_port=5556, backend_port=5557,
                  name="AksisWorkerProcess"):
         Process.__init__(self)
         # pylint: disable=invalid-name
         self.ip = ip
-        self.vocabulary_path = vocabulary_path
+        self.vocabulary_data_dir = vocabulary_data_dir
         self.top_words = top_words
         self.frontend_port = frontend_port
         self.backend_port = backend_port
         self.name = name
+        self.source_maxlen = source_maxlen
+        self.target_maxlen = target_maxlen
 
     # pylint: disable=no-member
     @socket(zmq.PULL)
@@ -57,13 +58,11 @@ class AksisParserWorker(Process):
 
         def _on_recv(msg):
             source, target, label = pickle.loads(msg[0])
-            source_len, source_tokens = sentence_to_padding_tokens(source, self.vocabulary, 55, tokenize)
-            target_len, target_tokens = sentence_to_padding_tokens(target, self.vocabulary, 55, tokenize)
+            source_len, source_tokens = trigram_sentence_to_padding_index(source, self.vocabulary, self.source_maxlen)
+            target_len, target_tokens = trigram_sentence_to_padding_index(target, self.vocabulary, self.target_maxlen)
 
-            if source_len == 0 or target_len == 0:
-                return
-
-            sender.send_pyobj((source_tokens, source_len, target_tokens, target_len, label))
+            if source_len and target_len:
+                sender.send_pyobj((source_tokens, source_len, target_tokens, target_len, label))
         pull_stream.on_recv(_on_recv)
         loop.start()
 
@@ -72,7 +71,6 @@ class AksisParserWorker(Process):
     def vocabulary(self):
         """load vocabulary"""
         logging.info("loading vocabulary for process {}", self.name)
-        vocab = load_vocabulary_from_pickle(self.vocabulary_path, top_words=self.top_words,
-                                            special_words=special_words)
+        vocab = VocabularyFromCustomStringTrigram(self.vocabulary_data_dir, top_words=self.top_words).build_vocabulary_from_pickle()
         return vocab
 

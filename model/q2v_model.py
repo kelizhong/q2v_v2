@@ -4,9 +4,10 @@ import numpy as np
 
 
 class Q2VModel(object):
-    def __init__(self, max_seq_length, vocab_size, word_embed_size, seq_embed_size, num_layers, src_cell_size,
-                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, worker_hosts, issync=0, use_lstm=True):
-        self.max_seq_length = max_seq_length
+    def __init__(self, source_max_seq_length, target_max_seq_length, vocab_size, word_embed_size, seq_embed_size, num_layers, src_cell_size,
+                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, worker_hosts=None, issync=0, use_lstm=True):
+        self.source_max_seq_length = source_max_seq_length
+        self.target_max_seq_length = target_max_seq_length
         self.vocab_size = vocab_size
         self.word_embed_size = word_embed_size
         self.seq_embed_size = seq_embed_size
@@ -29,10 +30,12 @@ class Q2VModel(object):
 
         self.graph()
 
+        self.saver = tf.train.Saver(tf.global_variables())
+
     def graph(self):
         # placeholder for input data
-        self._src_input_data = tf.placeholder(tf.int32, [None, self.max_seq_length], name='source_sequence')
-        self._tgt_input_data = tf.placeholder(tf.int32, [None, self.max_seq_length], name='target_sequence')
+        self._src_input_data = tf.placeholder(tf.int32, [None, self.source_max_seq_length], name='source_sequence')
+        self._tgt_input_data = tf.placeholder(tf.int32, [None, self.target_max_seq_length], name='target_sequence')
         self._labels = tf.placeholder(tf.float32, [None], name='labels')
         self._src_lens = tf.placeholder(tf.int32, [None], name='source_seq_lengths')
         self._tgt_lens = tf.placeholder(tf.int32, [None], name='target_seq_lengths')
@@ -50,7 +53,7 @@ class Q2VModel(object):
         self._def_network()
         self._def_loss()
         self._def_optimize()
-        #self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
+        # self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
 
     def _def_network(self):
         # Build shared encoder
@@ -58,16 +61,17 @@ class Q2VModel(object):
             # TODO: need play with forgetGate and peeholes here
             # for tf1.1, tf.contrib.rnn.LSTMCell
             if self.use_lstm:
-                # src_single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
-                src_single_cell = tf.contrib.rnn.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
+                src_single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
+
+                # src_single_cell = tf.contrib.rnn.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
             else:
-                # src_single_cell = tf.nn.rnn_cell.GRUCell(self.src_cell_size)
-                src_single_cell = tf.contrib.rnn.GRUCell(self.src_cell_size)
+                src_single_cell = tf.nn.rnn_cell.GRUCell(self.src_cell_size)
+                # src_single_cell = tf.contrib.rnn.GRUCell(self.src_cell_size)
 
             src_cell = src_single_cell
             if self.num_layers > 1:
-                # src_cell = tf.nn.rnn_cell.MultiRNNCell([src_single_cell] * self.num_layers)
-                src_cell = tf.contrib.rnn.MultiRNNCell([src_single_cell] * self.num_layers)
+                src_cell = tf.nn.rnn_cell.MultiRNNCell([src_single_cell] * self.num_layers)
+                # src_cell = tf.contrib.rnn.MultiRNNCell([src_single_cell] * self.num_layers)
 
             # compute source sequence related tensors
             src_output, _ = tf.nn.dynamic_rnn(src_cell, self.src_input_distributed, sequence_length=self._src_lens,
@@ -135,7 +139,8 @@ class Q2VModel(object):
             self.loss = self.contrastive_loss(self._labels, self.distance, self.batch_size)
             # compute src / tgt similarity
 
-    def get_train_feed_dict(self, sources, sources_len, targets, targets_len, labels, source_partitions, target_partitions):
+    def get_train_feed_dict(self, sources, sources_len, targets, targets_len, labels, source_partitions,
+                            target_partitions):
         """
         Returns a batch feed dict for given srcSquence and tgtSequences.
 
@@ -159,7 +164,7 @@ class Q2VModel(object):
         optimizer = tf.train.AdadeltaOptimizer(self.learning_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss)
-        if self.issync == 1:
+        if self.issync == 1 and self.worker_hosts:
             rep_op = tf.train.SyncReplicasOptimizer(optimizer,
                                                     replicas_to_aggregate=len(
                                                         self.worker_hosts),
@@ -167,12 +172,12 @@ class Q2VModel(object):
                                                         self.worker_hosts),
                                                     use_locking=True)
             self.train = rep_op.apply_gradients(grads_and_vars,
-                                                   global_step=self.global_step)
+                                                global_step=self.global_step)
             self.init_token_op = rep_op.get_init_tokens_op()
             self.chief_queue_runner = rep_op.get_chief_queue_runner()
         else:
             self.train = optimizer.apply_gradients(grads_and_vars,
-                                                      global_step=self.global_step)
+                                                   global_step=self.global_step)
 
         self._add_post_train_ops()
 
@@ -192,11 +197,26 @@ class Q2VModel(object):
         """ Saves variables to given path """
         return self.saver.save(session, path, global_step)
 
-    def generate_partition(self, batch_size, seqlen):
-        partitions = [0] * (batch_size * self.max_seq_length)
+    def generate_partition(self, batch_size, seqlen, max_seq_length):
+        partitions = [0] * (batch_size * max_seq_length)
         step = 0
         for each in seqlen:
-            idx = each + self.max_seq_length * step
+            idx = each + max_seq_length * step
             partitions[idx - 1] = 1
             step += 1
         return partitions
+
+    def step(self, session, sources, source_lens, targets, target_lens, labels, source_embedding=True):
+        source_partitions = self.generate_partition(self.batch_size, source_lens, self.source_max_seq_length)
+        target_partitions = self.generate_partition(self.batch_size, target_lens, self.target_max_seq_length)
+        feed_dict = self.get_train_feed_dict(sources, source_lens, targets, target_lens, labels,
+                                              source_partitions, target_partitions)
+        ops = [self.train, self.loss]
+        if source_embedding:
+            ops.append(self.src_seq_embedding)
+        outputs = session.run(ops, feed_dict=feed_dict)
+
+        if source_embedding:
+            return outputs[1], outputs[2]
+        else:
+            return outputs[1], None
