@@ -124,6 +124,8 @@ class Trainer(object):
         tensor_memory = defaultdict(int)
         for item in tf.global_variables():
             logging.info("variable:{}, device:{}", item.name, item.device)
+        # TODO int32 and float32, dtype?
+        for item in tf.trainable_variables():
             tensor_memory[item.device] += int(np.prod(item.shape))
         for key, value in tensor_memory.items():
             logging.info("device:{}, memory.:{}", key, value)
