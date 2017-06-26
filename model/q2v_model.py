@@ -169,7 +169,7 @@ class Q2VModel(object):
         optimizer = COCOB()
 
         grads_and_vars = optimizer.compute_gradients(self.loss)
-        if self.is_sync == 1 and self.worker_hosts:
+        if self.is_sync and self.worker_hosts:
             rep_op = tf.train.SyncReplicasOptimizer(optimizer,
                                                     replicas_to_aggregate=len(
                                                         self.worker_hosts),

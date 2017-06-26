@@ -22,7 +22,11 @@ import time
 
 import logbook as logging
 import tensorflow as tf
-
+import os
+# https://github.com/tensorflow/tensorflow/commit/ec1403e7dc2b919531e527d36d28659f60621c9e
+# os.environ['TF_CPP_MIN_VLOG_LEVEL']='3'
+import numpy as np
+from collections import defaultdict
 from common.constant import special_words
 from config.config import FLAGS
 from data_io.distribute_stream.aksis_data_receiver import AksisDataReceiver
@@ -116,49 +120,60 @@ class Trainer(object):
             stream = self.data_local_stream
         return stream
 
+    def _log_variable_info(self):
+        tensor_memory = defaultdict(int)
+        for item in tf.global_variables():
+            logging.info("variable:{}, device:{}", item.name, item.device)
+            tensor_memory[item.device] += int(np.prod(item.shape))
+        for key, value in tensor_memory.items():
+            logging.info("device:{}, memory.:{}", key, value)
+
     def train(self):
-        with tf.device(self.device):
-            with tf.Session(target=self.master,
-                            config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)) as sess:
-                model = create_model(sess, False)
-            for item in tf.global_variables():
-                logging.info("variable:{}, device:{}", item.name, item.device)
-            init_op = tf.global_variables_initializer()
-        sv = tf.train.Supervisor(is_chief=(self.task_index == 0),
-                                 logdir=self.model_dir,
-                                 init_op=init_op,
-                                 summary_op=None,
-                                 saver=model.saver,
-                                 global_step=model.global_step,
-                                 save_model_secs=60)
-        gpu_options = tf.GPUOptions(allow_growth=True)
-        session_config = tf.ConfigProto(allow_soft_placement=True,
-                                        log_device_placement=True,
-                                        gpu_options=gpu_options,
-                                        intra_op_parallelism_threads=16)
-        with sv.prepare_or_wait_for_session(master=self.master, config=session_config) as sess:
-            # 如果是同步模式
-            if self.task_index == 0 and self.is_sync:
-                sv.start_queue_runners(sess, [model.chief_queue_runner])
-                sess.run(model.init_token_op)
+        if self.job_name == "ps":
+            self.server.join()
+        else:
+            with tf.device(self.device):
+                with tf.Session(target=self.master,
+                                config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+                    model = create_model(sess, False)
+                self._log_variable_info()
 
-            step_time, loss = 0.0, 0.0
-            data_stream = self.data_stream
-            for current_step, (sources, source_lens, targets, target_lens, labels) in enumerate(data_stream):
-                start_time = time.time()
+                init_op = tf.global_variables_initializer()
+            sv = tf.train.Supervisor(is_chief=(self.task_index == 0),
+                                     logdir=self.model_dir,
+                                     init_op=init_op,
+                                     summary_op=None,
+                                     saver=model.saver,
+                                     global_step=model.global_step,
+                                     save_model_secs=60)
+            gpu_options = tf.GPUOptions(allow_growth=True)
+            session_config = tf.ConfigProto(allow_soft_placement=True,
+                                            log_device_placement=False,
+                                            gpu_options=gpu_options,
+                                            intra_op_parallelism_threads=16)
+            with sv.prepare_or_wait_for_session(master=self.master, config=session_config) as sess:
+                # 如果是同步模式
+                if self.task_index == 0 and self.is_sync:
+                    sv.start_queue_runners(sess, [model.chief_queue_runner])
+                    sess.run(model.init_token_op)
 
-                step_loss, _ = model.step(sess, sources, source_lens, targets, target_lens, labels)
-                step_time += (time.time() - start_time) / self.steps_per_checkpoint
-                loss += step_loss / self.steps_per_checkpoint
+                step_time, loss = 0.0, 0.0
+                data_stream = self.data_stream
+                for current_step, (sources, source_lens, targets, target_lens, labels) in enumerate(data_stream):
+                    start_time = time.time()
 
-                # Once in a while, print statistics, and run evals.
-                if current_step % self.steps_per_checkpoint == 0:
-                    logging.info("global step %d, learning rate %.4f step-time:%.2f step-loss:%.4f loss:%.4f" %
-                                 (model.global_step.eval(), model.learning_rate, step_time, step_loss, loss))
-                    # set zero timer and loss.
-                    step_time, loss = 0.0, 0.0
+                    step_loss, _ = model.step(sess, sources, source_lens, targets, target_lens, labels)
+                    step_time += (time.time() - start_time) / self.steps_per_checkpoint
+                    loss += step_loss / self.steps_per_checkpoint
 
-        sv.stop()
+                    # Once in a while, print statistics, and run evals.
+                    if current_step % self.steps_per_checkpoint == 0:
+                        logging.info("global step %d, learning rate %.4f step-time:%.2f step-loss:%.4f loss:%.4f" %
+                                     (model.global_step.eval(), model.learning_rate, step_time, step_loss, loss))
+                        # set zero timer and loss.
+                        step_time, loss = 0.0, 0.0
+
+            sv.stop()
 
 
 def main(_):
