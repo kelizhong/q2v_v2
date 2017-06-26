@@ -55,23 +55,27 @@ class Q2VModel(object):
         self._def_optimize()
         # self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
 
+    def _single_cell(self):
+        # for tf1.1, tf.contrib.rnn.LSTMCell
+        if self.use_lstm:
+            # single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
+
+            single_cell = tf.contrib.rnn.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
+        else:
+            # single_cell = tf.nn.rnn_cell.GRUCell(self.src_cell_size)
+            single_cell = tf.contrib.rnn.GRUCell(self.src_cell_size)
+        return single_cell
+
     def _def_network(self):
         # Build shared encoder
         with tf.variable_scope('shared_encoder'):
             # TODO: need play with forgetGate and peeholes here
-            # for tf1.1, tf.contrib.rnn.LSTMCell
-            if self.use_lstm:
-                src_single_cell = tf.nn.rnn_cell.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
 
-                # src_single_cell = tf.contrib.rnn.LSTMCell(self.src_cell_size, forget_bias=1.0, use_peepholes=False)
-            else:
-                src_single_cell = tf.nn.rnn_cell.GRUCell(self.src_cell_size)
-                # src_single_cell = tf.contrib.rnn.GRUCell(self.src_cell_size)
-
-            src_cell = src_single_cell
             if self.num_layers > 1:
-                src_cell = tf.nn.rnn_cell.MultiRNNCell([src_single_cell] * self.num_layers)
-                # src_cell = tf.contrib.rnn.MultiRNNCell([src_single_cell] * self.num_layers)
+                # src_cell = tf.nn.rnn_cell.MultiRNNCell([self._single_cell() for _ in range(self.num_layers)])
+                src_cell = tf.contrib.rnn.MultiRNNCell([self._single_cell() for _ in range(self.num_layers)])
+            else:
+                src_cell = self._single_cell()
 
             # compute source sequence related tensors
             src_output, _ = tf.nn.dynamic_rnn(src_cell, self.src_input_distributed, sequence_length=self._src_lens,
@@ -86,7 +90,6 @@ class Q2VModel(object):
             self.tgt_M = tf.get_variable('tgt_M', shape=[self.src_cell_size, self.seq_embed_size],
                                          initializer=tf.truncated_normal_initializer())
             # self.tgt_b = tf.get_variable('tgt_b', shape=[self.seq_embed_size])
-
         with tf.variable_scope('shared_encoder', reuse=True):
             # compute target sequence related tensors by reusing shared_encoder model
             tgt_output, _ = tf.nn.dynamic_rnn(src_cell, self.tgt_input_distributed, sequence_length=self._tgt_lens,

@@ -60,7 +60,6 @@ class AksisParserWorker(Process):
             source, target, label = pickle.loads(msg[0])
             source_len, source_tokens = trigram_sentence_to_padding_index(source, self.vocabulary, self.source_maxlen)
             target_len, target_tokens = trigram_sentence_to_padding_index(target, self.vocabulary, self.target_maxlen)
-
             if source_len and target_len:
                 sender.send_pyobj((source_tokens, source_len, target_tokens, target_len, label))
         pull_stream.on_recv(_on_recv)

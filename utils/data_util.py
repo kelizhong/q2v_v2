@@ -402,7 +402,7 @@ def pad_sequences(sequences, maxlen=None, dtype='int32',
             x[idx, -len(trunc):] = trunc
         else:
             raise ValueError('Padding type "%s" not understood' % padding)
-        return x
+    return x
 
 
 def find_ngrams(input_list, n):
@@ -425,6 +425,6 @@ def trigram_sentence_to_padding_index(sentence, trigram_dict, maxlen):
         index = trigram_encoding(sentence, trigram_dict)
     except Exception, e:
         return 0, []
-    original_len = len(index)
+    original_len = min(len(index), maxlen)
     index = pad_sequences(np.array([index]), padding='post', truncating='post', maxlen=maxlen)
     return original_len, index[0]
