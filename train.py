@@ -2,10 +2,18 @@
 """
 Change the hardcoded host urls below with your own hosts.
 Run like this:
-pc-01$ python example.py --job_name="ps" --task_index=0
-pc-02$ python example.py --job_name="worker" --task_index=0
-pc-03$ python example.py --job_name="worker" --task_index=1
-pc-04$ python example.py --job_name="worker" --task_index=2
+pc-01$ CUDA_VISIBLE_DEVICES='' python train.py --job_name="ps" --task_index=0 --data_stream_port=5558 --gpu=0 --ps_hosts='localhost:2221' --worker_hosts='localhost:2222,localhost:2223,localhost:2224'
+pc-02$ CUDA_VISIBLE_DEVICES=1 python train.py --job_name="worker" --task_index=0 --data_stream_port=5558 --gpu=1 --ps_hosts='localhost:2221' --worker_hosts='localhost:2222,localhost:2223,localhost:2224'
+pc-03$ CUDA_VISIBLE_DEVICES=2 python train.py --job_name="worker" --task_index=1 --data_stream_port=5558 --gpu=2 --ps_hosts='localhost:2221' --worker_hosts='localhost:2222,localhost:2223,localhost:2224'
+pc-04$ CUDA_VISIBLE_DEVICES=3 python train.py --job_name="worker" --task_index=2 --data_stream_port=5558 --gpu=3 --ps_hosts='localhost:2221' --worker_hosts='localhost:2222,localhost:2223,localhost:2224'
+
+# single machine with zmq stream:
+CUDA_VISIBLE_DEVICES=0 python train.py --gpu 0 --data_stream_port 5558
+
+# single machine with local file stream:
+CUDA_VISIBLE_DEVICES=0 python train.py --gpu 0
+
+
 """
 
 from __future__ import print_function

@@ -26,11 +26,11 @@ tf.app.flags.DEFINE_integer("encoding_size", 80,
 tf.app.flags.DEFINE_integer("src_cell_size", 96, "LSTM cell size in source RNN model.")
 tf.app.flags.DEFINE_integer("tgt_cell_size", 96,
                             "LSTM cell size in target RNN model. Same number of nodes for each model layer.")
-tf.app.flags.DEFINE_integer("num_layers", 4, "Number of layers in the model.")
+tf.app.flags.DEFINE_integer("num_layers", 3, "Number of layers in the model.")
 tf.app.flags.DEFINE_integer("max_vocabulary_size", 64001, "Sequence vocabulary size in the mapping task.")
 
-tf.app.flags.DEFINE_integer("source_max_seq_length", 50, "max number of words in each source or target sequence.")
-tf.app.flags.DEFINE_integer("target_max_seq_length", 150, "max number of words in each source or target sequence.")
+tf.app.flags.DEFINE_integer("source_max_seq_length", 30, "max number of words in each source or target sequence.")
+tf.app.flags.DEFINE_integer("target_max_seq_length", 100, "max number of words in each source or target sequence.")
 tf.app.flags.DEFINE_integer("max_epoch", 8, "max epoc number for training procedure.")
 tf.app.flags.DEFINE_integer("predict_nbest", 20, "max top N for evaluation prediction.")
 
