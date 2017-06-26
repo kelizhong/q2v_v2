@@ -36,7 +36,7 @@ tf.app.flags.DEFINE_integer("predict_nbest", 20, "max top N for evaluation predi
 
 tf.app.flags.DEFINE_string("data_dir", 'data', "Data directory")
 tf.app.flags.DEFINE_string("train_data_file", 'data/rawdata/TrainPairs', "Train Data file")
-tf.app.flags.DEFINE_string("model_dir", 'models', "Trained model directory.")
+tf.app.flags.DEFINE_string("model_dir", 'data/models', "Trained model directory.")
 tf.app.flags.DEFINE_string("export_dir", 'exports', "Trained model directory.")
 tf.app.flags.DEFINE_string("device", "gpu:0",
                            "Default to use GPU:0. Softplacement used, if no GPU found, further default to cpu:0.")

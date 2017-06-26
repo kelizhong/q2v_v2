@@ -139,12 +139,12 @@ class Trainer(object):
                                 config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
                     model = create_model(sess, False)
                 self._log_variable_info()
-
+                summary_op = tf.summary.merge_all()
                 init_op = tf.global_variables_initializer()
             sv = tf.train.Supervisor(is_chief=(self.task_index == 0),
                                      logdir=self.model_dir,
                                      init_op=init_op,
-                                     summary_op=None,
+                                     summary_op=summary_op,
                                      saver=model.saver,
                                      global_step=model.global_step,
                                      save_model_secs=60)
@@ -154,6 +154,9 @@ class Trainer(object):
                                             gpu_options=gpu_options,
                                             intra_op_parallelism_threads=16)
             with sv.prepare_or_wait_for_session(master=self.master, config=session_config) as sess:
+                # setup tensorboard logging
+                # sw = tf.summary.FileWriter(FLAGS.model_dir, sess.graph, flush_secs=120)
+
                 # 如果是同步模式
                 if self.task_index == 0 and self.is_sync:
                     sv.start_queue_runners(sess, [model.chief_queue_runner])
@@ -168,6 +171,8 @@ class Trainer(object):
                     step_time += (time.time() - start_time) / self.steps_per_checkpoint
                     loss += step_loss / self.steps_per_checkpoint
 
+                    # loss_summary = tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=loss)])
+                    # sw.add_summary(loss_summary, current_step)
                     # Once in a while, print statistics, and run evals.
                     if current_step % self.steps_per_checkpoint == 0:
                         logging.info("global step %d, learning rate %.4f step-time:%.2f step-loss:%.4f loss:%.4f" %
