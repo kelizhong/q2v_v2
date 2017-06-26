@@ -1,11 +1,14 @@
 # coding=utf-8
 import tensorflow as tf
 import numpy as np
+from external.cocob_optimizer import COCOB
 
 
 class Q2VModel(object):
-    def __init__(self, source_max_seq_length, target_max_seq_length, vocab_size, word_embed_size, seq_embed_size, num_layers, src_cell_size,
-                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, worker_hosts=None, issync=0, use_lstm=True):
+    def __init__(self, source_max_seq_length, target_max_seq_length, vocab_size, word_embed_size, seq_embed_size,
+                 num_layers, src_cell_size,
+                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, worker_hosts=None, is_sync=0,
+                 use_lstm=True):
         self.source_max_seq_length = source_max_seq_length
         self.target_max_seq_length = target_max_seq_length
         self.vocab_size = vocab_size
@@ -17,10 +20,8 @@ class Q2VModel(object):
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.max_gradient_norm = max_gradient_norm
-        self.global_step = tf.Variable(0, name="global_step", trainable=False)
-        self.source_partitions = tf.placeholder(tf.int32, [None])
-        self.target_partitions = tf.placeholder(tf.int32, [None])
-        self.issync = issync
+
+        self.is_sync = is_sync
         self.worker_hosts = worker_hosts
         self.use_lstm = use_lstm
 
@@ -30,8 +31,6 @@ class Q2VModel(object):
 
         self.graph()
 
-        self.saver = tf.train.Saver(tf.global_variables())
-
     def graph(self):
         # placeholder for input data
         self._src_input_data = tf.placeholder(tf.int32, [None, self.source_max_seq_length], name='source_sequence')
@@ -39,6 +38,12 @@ class Q2VModel(object):
         self._labels = tf.placeholder(tf.float32, [None], name='labels')
         self._src_lens = tf.placeholder(tf.int32, [None], name='source_seq_lengths')
         self._tgt_lens = tf.placeholder(tf.int32, [None], name='target_seq_lengths')
+
+        self.source_partitions = tf.placeholder(tf.int32, [None])
+        self.target_partitions = tf.placeholder(tf.int32, [None])
+
+        # global step variable
+        self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
         # create word embedding vectors
         self.word_embedding = tf.get_variable('word_embedding', [self.vocab_size, self.word_embed_size],
@@ -53,7 +58,8 @@ class Q2VModel(object):
         self._def_network()
         self._def_loss()
         self._def_optimize()
-        # self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=20)
+
+        self.saver = tf.train.Saver(tf.global_variables())
 
     def _single_cell(self):
         # for tf1.1, tf.contrib.rnn.LSTMCell
@@ -69,7 +75,6 @@ class Q2VModel(object):
     def _def_network(self):
         # Build shared encoder
         with tf.variable_scope('shared_encoder'):
-            # TODO: need play with forgetGate and peeholes here
 
             if self.num_layers > 1:
                 # src_cell = tf.nn.rnn_cell.MultiRNNCell([self._single_cell() for _ in range(self.num_layers)])
@@ -83,20 +88,20 @@ class Q2VModel(object):
             src_last_output = self._last_output(src_output, src_cell.output_size, self.source_partitions)
             self.src_M = tf.get_variable('src_M', shape=[self.src_cell_size, self.seq_embed_size],
                                          initializer=tf.truncated_normal_initializer())
-            # self.src_b = tf.get_variable('src_b', shape=[self.seq_embed_size])
-            self.src_seq_embedding = tf.matmul(src_last_output, self.src_M)  # + self.src_b
+            self.src_b = tf.get_variable('src_b', shape=[self.seq_embed_size])
+            self.src_seq_embedding = tf.matmul(src_last_output, self.src_M) + self.src_b
 
             # declare tgt_M tensor before reuse them
             self.tgt_M = tf.get_variable('tgt_M', shape=[self.src_cell_size, self.seq_embed_size],
                                          initializer=tf.truncated_normal_initializer())
-            # self.tgt_b = tf.get_variable('tgt_b', shape=[self.seq_embed_size])
+            self.tgt_b = tf.get_variable('tgt_b', shape=[self.seq_embed_size])
         with tf.variable_scope('shared_encoder', reuse=True):
             # compute target sequence related tensors by reusing shared_encoder model
             tgt_output, _ = tf.nn.dynamic_rnn(src_cell, self.tgt_input_distributed, sequence_length=self._tgt_lens,
                                               dtype=tf.float32)
             tgt_last_output = self._last_output(tgt_output, src_cell.output_size, self.target_partitions)
 
-            self.tgt_seq_embedding = tf.matmul(tgt_last_output, self.tgt_M)  # + self.tgt_b
+            self.tgt_seq_embedding = tf.matmul(tgt_last_output, self.tgt_M) + self.tgt_b
 
     @staticmethod
     def _last_output_legacy(output, length):
@@ -106,8 +111,6 @@ class Q2VModel(object):
         idx = tf.range(0, b_size) * max_len + (length - 1)
         flat = tf.reshape(output, [-1, output_size])
         relevant = tf.gather(flat, idx)
-        # output = tf.transpose(output, [1, 0, 2])
-        # last = tf.gather(output, int(output.get_shape()[0]) - 1)
         return relevant
 
     @staticmethod
@@ -163,11 +166,10 @@ class Q2VModel(object):
         Builds graph to minimize loss function.
         """
 
-        # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-        optimizer = tf.train.AdadeltaOptimizer(self.learning_rate)
+        optimizer = COCOB()
 
         grads_and_vars = optimizer.compute_gradients(self.loss)
-        if self.issync == 1 and self.worker_hosts:
+        if self.is_sync == 1 and self.worker_hosts:
             rep_op = tf.train.SyncReplicasOptimizer(optimizer,
                                                     replicas_to_aggregate=len(
                                                         self.worker_hosts),
@@ -213,7 +215,7 @@ class Q2VModel(object):
         source_partitions = self.generate_partition(self.batch_size, source_lens, self.source_max_seq_length)
         target_partitions = self.generate_partition(self.batch_size, target_lens, self.target_max_seq_length)
         feed_dict = self.get_train_feed_dict(sources, source_lens, targets, target_lens, labels,
-                                              source_partitions, target_partitions)
+                                             source_partitions, target_partitions)
         ops = [self.train, self.loss]
         if source_embedding:
             ops.append(self.src_seq_embedding)

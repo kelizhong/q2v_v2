@@ -3,10 +3,11 @@ from utils.data_util import query_title_score_generator_from_aksis_data, sentenc
 
 
 class BatchDataHandler(object):
-    def __init__(self, vocabulary, max_seq_length, batch_size):
+    def __init__(self, vocabulary, source_max_seq_length, target_max_seq_length, batch_size):
         self.batch_size = batch_size
         self.vocabulary = vocabulary
-        self.max_seq_length = max_seq_length
+        self.source_max_seq_length = source_max_seq_length
+        self.target_max_seq_length = target_max_seq_length
         self._sources, self._source_lens, self._targets, self._target_lens, self._labels = [], [], [], [], []
 
     @property
@@ -14,8 +15,8 @@ class BatchDataHandler(object):
         return len(self._sources)
 
     def parse_and_insert_data_object(self, source, target, label):
-        source_len, source_tokens = sentence_to_padding_tokens(source, self.vocabulary, self.max_seq_length)
-        target_len, target_tokens = sentence_to_padding_tokens(target, self.vocabulary, self.max_seq_length)
+        source_len, source_tokens = sentence_to_padding_tokens(source, self.vocabulary, self.source_max_seq_length)
+        target_len, target_tokens = sentence_to_padding_tokens(target, self.vocabulary, self.target_max_seq_length)
         data_object = self.insert_data_object(source_tokens, source_len, target_tokens, target_len, label)
         return data_object
 
@@ -43,13 +44,12 @@ class BatchDataHandler(object):
 
 
 class AksisDataStream(object):
-    def __init__(self, vocabulary_data_dir, top_words, special_words, max_seq_length, batch_size, raw_data_path=None, stop_freq=-1):
-        self.max_seq_length = max_seq_length
+    def __init__(self, vocabulary_data_dir, top_words, special_words, source_max_seq_length, target_max_seq_length, batch_size, raw_data_path=None, stop_freq=-1):
         self.stop_freq = stop_freq
         self.batch_size = batch_size
         self.raw_data_path = raw_data_path
         vocabulary = self._init_vocabulary(vocabulary_data_dir, top_words, special_words, raw_data_path)
-        self.batch_data = BatchDataHandler(vocabulary, max_seq_length, batch_size)
+        self.batch_data = BatchDataHandler(vocabulary, source_max_seq_length, target_max_seq_length, batch_size)
 
     def generate_batch_data(self):
         for num, (source, target) in enumerate(query_title_score_generator_from_aksis_data(self.raw_data_path)):

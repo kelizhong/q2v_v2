@@ -10,7 +10,7 @@ def create_model(session, forward_only):
     logging.info("Creating {} layers of {} units.", FLAGS.num_layers, FLAGS.embedding_size)
     model = Q2VModel(FLAGS.source_max_seq_length, FLAGS.target_max_seq_length, FLAGS.max_vocabulary_size, FLAGS.src_cell_size, FLAGS.encoding_size,
                      FLAGS.num_layers, FLAGS.src_cell_size, FLAGS.tgt_cell_size,
-                     FLAGS.batch_size, FLAGS.learning_rate, FLAGS.max_gradient_norm, issync=FLAGS.is_sync)
+                     FLAGS.batch_size, FLAGS.learning_rate, FLAGS.max_gradient_norm, is_sync=FLAGS.is_sync)
 
     ckpt = tf.train.get_checkpoint_state(FLAGS.model_dir)
     if ckpt and ckpt.model_checkpoint_path:

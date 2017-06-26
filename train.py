@@ -95,7 +95,7 @@ class Trainer(object):
     @property
     def data_local_stream(self):
         data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words,
-                                      special_words=self.special_words, max_seq_length=self.max_seq_length,
+                                      special_words=self.special_words, source_max_seq_length=self.source_max_seq_length, target_max_seq_length=self.target_max_seq_length,
                                       batch_size=self.batch_size,
                                       raw_data_path=self.raw_data_path).generate_batch_data()
         return data_stream
