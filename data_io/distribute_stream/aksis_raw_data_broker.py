@@ -1,12 +1,12 @@
 # coding=utf-8
-"""Broker between ventilitor process and worker process"""
+"""Broker between ventilator process and worker process"""
 import logbook as logging
 import zmq
 from zmq.devices import ProcessDevice
 
 
 class AksisRawDataBroker(object):
-    """Broker between ventilitor process and worker process
+    """Broker between ventilator process and worker process
     Parameters
     ----------
         ip : str

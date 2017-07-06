@@ -16,6 +16,19 @@ from exception.resource_exception import ResourceNotFoundError
 
 
 class VocabularyBase(object):
+    """
+    Parameters
+    ----------
+        vocabulary_data_dir: str
+            Path where the vocabulary will be created for vocabulary from AKSIS corpus data or custom string
+        top_words: int
+            limit on the size of the created vocabulary
+        special_words:  dict
+            special vocabulary symbols(begin of sentence, end of sentence, unknown word) - we always put them at the start.
+        words_freq_counter_name: str
+            word frequency counter name
+    """
+
     def __init__(self, vocabulary_data_dir, top_words, special_words,
                  words_freq_counter_name="words_freq_counter"):
         self.vocabulary_data_dir = vocabulary_data_dir
@@ -30,20 +43,7 @@ class VocabularyBase(object):
 
     def build_vocabulary_from_pickle(self):
         """load vocabulary from pickle
-        Parameters
-        ----------
-            path: str
-                corpus path
-            top_words: int
-                the max words num in the vocabulary
-            special_words: dict
-             special_words like <unk>, <s>, </s>
-        Returns
-        -------
-            vocabulary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            9322221111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111-=
-
         """
-
         if os.path.isfile(self.vocab_path):
             vocab = load_pickle_object(self.vocab_path)
         elif os.path.isfile(self.words_freq_counter_path):
@@ -77,6 +77,8 @@ class VocabularyBase(object):
 
 
 class VocabularyFromLocalFile(VocabularyBase):
+    """create vocabulary from local file"""
+
     def __init__(self, vocabulary_data_dir, top_words=40000, special_words=dict(),
                  words_freq_counter_name="words_freq_counter"):
         super(VocabularyFromLocalFile, self).__init__(vocabulary_data_dir, top_words, special_words,
@@ -84,16 +86,13 @@ class VocabularyFromLocalFile(VocabularyBase):
 
     def build_words_frequency_counter(self, raw_data_path, tokenizer=None):
         """
-        Create vocabulary file (if it does not exist yet) from data file.
+        build word frequency counter(if it does not exist yet) from raw data file.
         Data file should have one sentence per line.
         Each sentence will be tokenized.
-        Vocabulary contains the most-frequent tokens up to max_vocabulary_size.
-        We write it to vocabulary_path in a one-token-per-line format, so that later
-        token in the first line gets id=0, second line gets id=1, and so on.
-        Args:
-          vocabulary_path: path where the vocabulary will be created.
-          data_path: data file that will be used to create vocabulary.
-          max_vocabulary_size: limit on the size of the created vocabulary.
+        Parameters
+        ----------
+          raw_data_path: raw data path for corpus that will be used to create word frequency counter.
+          tokenizer: tokenizer to tokenize the sentence in raw data
         """
         if not os.path.isfile(self.words_freq_counter_path):
             print("Building words frequency counter %s from data %s" % (self.words_freq_counter_path, raw_data_path))
@@ -105,7 +104,7 @@ class VocabularyFromLocalFile(VocabularyBase):
                             print("  processing line %d" % num)
                         try:
                             tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
-                        except Exception, e:
+                        except Exception as e:
                             print("Tokenize failure: " + line)
                             continue
                         for word in tokens:
@@ -127,18 +126,11 @@ class VocabularyFromLocalFile(VocabularyBase):
 
 
 class VocabFromZMQ(VocabularyBase):
-    """
-    Create vocabulary file (if it does not exist yet) from data file.
-    Data file should have one sentence per line.
-    Each sentence will be tokenized.
-    Vocabulary contains the most-frequent tokens up to top_words.
-    We write it to vocab_file in pickle format.
+    """build vocabulary using zmq to parse and generate data
     Parameters
     ----------
-        corpus_files: list
-            corpus files list that will be used to create vocabulary
-        vocab_save_path: str
-            vocab file name where the vocabulary will be created
+        vocabulary_data_dir: str
+            vocab file name where the vocabulary and word counter will be created
         sentence_gen: generator
             generator which produce the sentence in corpus data
         top_words: int
@@ -153,14 +145,18 @@ class VocabFromZMQ(VocabularyBase):
             port for collector process socket
         overwrite: bool
             whether to overwrite the existed vocabulary
+        words_freq_counter_name: str
+            word frequency counter name
+        special_words:  dict
+            special vocabulary symbols(begin of sentence, end of sentence, unknown word) - we always put them at the start.
     """
 
     def __init__(self, vocabulary_data_dir, special_words=dict(), sentence_gen=sentence_gen, workers_num=1,
                  top_words=100000,
-                 ip='127.0.0.1', ventilator_port='5555', collector_port='5556',
+                 ip='127.0.0.1', ventilator_port=5555, collector_port=5556,
                  overwrite=True, words_freq_counter_name="words_freq_counter"):
         super(VocabFromZMQ, self).__init__(vocabulary_data_dir, top_words, special_words,
-                                                      words_freq_counter_name)
+                                           words_freq_counter_name)
         self.sentence_gen = sentence_gen
         self.workers_num = workers_num
         self.top_words = top_words
@@ -170,11 +166,21 @@ class VocabFromZMQ(VocabularyBase):
         self.overwrite = overwrite
 
     def build_words_frequency_counter(self, corpus_files):
+        """
+        build word frequency counter(if it does not exist yet) from corpus_files.
+        Data file should have one sentence per line.
+        Each sentence will be tokenized in worker process.
+        We write it to `words_freq_counter_name` in pickle format.
+        Parameters
+        ----------
+            corpus_files: list
+                corpus files list that will be used to create word frequency counter
+        """
         process_pool = []
         v = VentilatorProcess(corpus_files, self.ip, self.ventilator_port, sentence_gen=self.sentence_gen)
         v.start()
         process_pool.append(v)
-        for i in xrange(self.workers_num):
+        for i in range(self.workers_num):
             w = WorkerProcess(self.ip, self.ventilator_port, self.collector_port, name='WorkerProcess_{}'.format(i))
             w.start()
             process_pool.append(w)
@@ -194,24 +200,25 @@ class VocabFromZMQ(VocabularyBase):
 
 
 class VocabularyFromCustomStringTrigram(VocabularyBase):
+    """build vocabulary from custom string with trigram parser
+    Parameters
+    ----------
+        vocabulary_data_dir: str
+            vocab file name where the vocabulary and word counter will be created
+        top_words: int
+            limit on the size of the created vocabulary
+        words_freq_counter_name: str
+            word frequency counter name
+        special_words:  dict
+            special vocabulary symbols(begin of sentence, end of sentence, unknown word) - we always put them at the start.
+    """
+
     def __init__(self, vocabulary_data_dir, top_words=sys.maxsize, special_words=dict(),
                  words_freq_counter_name="words_freq_counter"):
         super(VocabularyFromCustomStringTrigram, self).__init__(vocabulary_data_dir, top_words, special_words,
-                                                      words_freq_counter_name)
+                                                                words_freq_counter_name)
 
     def build_words_frequency_counter(self, string=None):
-        """
-        Create vocabulary file (if it does not exist yet) from data file.
-        Data file should have one sentence per line.
-        Each sentence will be tokenized.
-        Vocabulary contains the most-frequent tokens up to max_vocabulary_size.
-        We write it to vocabulary_path in a one-token-per-line format, so that later
-        token in the first line gets id=0, second line gets id=1, and so on.
-        Args:
-          vocabulary_path: path where the vocabulary will be created.
-          data_path: data file that will be used to create vocabulary.
-          max_vocabulary_size: limit on the size of the created vocabulary.
-        """
         string = string if string else 'abcdefghijklmnopqrstuvwxyz1234567890#.&\\'
         if not os.path.isfile(self.words_freq_counter_path):
             print("Building words frequency counter %s from custom string %s" % (self.words_freq_counter_path, string))

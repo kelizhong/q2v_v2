@@ -1,11 +1,10 @@
-from sets import Set
 import random
 
 
 class RandomSet(object):
     def __init__(self, capacity=1024):
         self.capacity = capacity
-        self.set = Set()
+        self.set = set()
 
     def __len__(self):
         return len(self.set)

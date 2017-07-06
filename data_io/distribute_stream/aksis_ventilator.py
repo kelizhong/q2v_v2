@@ -1,6 +1,6 @@
 # coding=utf-8
 # pylint: disable=too-many-instance-attributes, too-many-arguments
-"""ventilitor that read/produce the corpus data"""
+"""ventilator that read/produce the corpus data"""
 import os
 from multiprocessing import Process
 import fnmatch
@@ -9,7 +9,6 @@ import zmq
 from zmq.decorators import socket
 from utils.appmetric_util import AppMetric
 from utils.data_util import negative_sampling_train_data_generator
-from exception.file_exception import FileNotFoundError
 
 
 class AksisDataVentilatorProcess(Process):
@@ -20,7 +19,7 @@ class AksisDataVentilatorProcess(Process):
             Data_dir for the aksis corpus data
         file_pattern: tuple
             File pattern use to distinguish different corpus, every file pattern will start
-            a ventilitor process.
+            a ventilator process.
             File pattern is tuple type(file pattern, dropout). Dropout is the probability
             to ignore the data.
             If dropout < 0, all the data will be accepted to be trained
@@ -58,9 +57,9 @@ class AksisDataVentilatorProcess(Process):
         metric = AppMetric(name=self.name, interval=self.metric_interval)
         try:
             data_stream = self.get_data_stream()
-        except FileNotFoundError, e:
+        except FileNotFoundError as e:
             return
-        for i in xrange(self.num_epoch):
+        for i in range(self.num_epoch):
             for data in data_stream:
                 sender.send_pyobj(data)
                 metric.notify(1)

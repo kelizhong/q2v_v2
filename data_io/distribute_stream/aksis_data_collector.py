@@ -67,36 +67,12 @@ class AksisDataCollector(Process):
             # accept the msg and add to the bucket queue and send the batch data to trainer
             # encoder_sentence_id for query in aksis data
             # decoder_sentence_id for title in aksis data
-            source_tokens, source_len, target_tokens, target_len, label_id = pickle.loads(msg[0])
+            source_tokens, source_lens, target_tokens, target_lens, label_id = pickle.loads(msg[0])
             # add the data from parser worker, and get data from the batch queue
-            self.insert_data_object(source_tokens, source_len, target_tokens, target_len, label_id)
-            if self.data_object_length == self.batch_size:
-                sender.send_pyobj(self.data_object)
+            if len(source_tokens) == self.batch_size:
+                sender.send_pyobj((source_tokens, source_lens, target_tokens, target_lens, label_id))
                 metric.notify(self.batch_size)
-                self.clear_data_object()
 
         pull_stream.on_recv(_on_recv)
 
         loop.start()
-
-    @property
-    def data_object_length(self):
-        return len(self._sources)
-
-    def insert_data_object(self, source_tokens, source_len, target_tokens, target_len, label_id):
-        self._sources.append(source_tokens)
-        self._source_lens.append(source_len)
-        self._targets.append(target_tokens)
-        self._target_lens.append(target_len)
-        self._labels.append(label_id)
-
-    def clear_data_object(self):
-        del self._sources[:]
-        del self._source_lens[:]
-        del self._targets[:]
-        del self._target_lens[:]
-        del self._labels[:]
-
-    @property
-    def data_object(self):
-        return self._sources, self._source_lens, self._targets, self._target_lens, self._labels

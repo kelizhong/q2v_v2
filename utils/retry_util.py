@@ -38,7 +38,7 @@ def retry(tries, delay=1, backoff=1, exception=Exception, name=None, report=lamb
         def wrapper(self, *args, **kwargs):
             _tries = tries(self) if isinstance(tries, types.LambdaType) else tries
             _delay = delay(self) if isinstance(delay, types.LambdaType) else delay
-            for i in xrange(_tries):
+            for i in range(_tries):
                 try:
                     ret = func(self, *args, **kwargs)
                     return ret

@@ -1,17 +1,17 @@
 # coding=utf-8
 # pylint: disable=too-many-arguments, arguments-differ
-"""worker to parse the raw data from ventilitor"""
+"""worker to parse the raw data from ventilator"""
 from multiprocessing import Process
 import logbook as logging
 import pickle
 # pylint: disable=ungrouped-imports
 import zmq
 from utils.decorator_util import memoized
-from utils.data_util import trigram_sentence_to_padding_index
-from vocabulary.vocab import VocabularyFromLocalFile, VocabularyFromCustomStringTrigram
+from vocabulary.vocab import VocabularyFromCustomStringTrigram
 from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.decorators import socket
+from ..batch_data_handler import BatchDataTrigramHandler
 
 
 class AksisParserWorker(Process):
@@ -31,7 +31,7 @@ class AksisParserWorker(Process):
             Port for the outbound traffic
     """
 
-    def __init__(self, ip, vocabulary_data_dir, top_words, source_maxlen=30, target_maxlen=100, frontend_port=5556, backend_port=5557,
+    def __init__(self, ip, vocabulary_data_dir, top_words, batch_size, source_maxlen=30, target_maxlen=100, frontend_port=5556, backend_port=5557,
                  name="AksisWorkerProcess"):
         Process.__init__(self)
         # pylint: disable=invalid-name
@@ -41,8 +41,10 @@ class AksisParserWorker(Process):
         self.frontend_port = frontend_port
         self.backend_port = backend_port
         self.name = name
+        self.batch_size = batch_size
         self.source_maxlen = source_maxlen
         self.target_maxlen = target_maxlen
+        self.batch_data = BatchDataTrigramHandler(self.vocabulary, source_maxlen, target_maxlen, batch_size)
 
     # pylint: disable=no-member
     @socket(zmq.PULL)
@@ -58,10 +60,9 @@ class AksisParserWorker(Process):
 
         def _on_recv(msg):
             source, target, label = pickle.loads(msg[0])
-            source_len, source_tokens = trigram_sentence_to_padding_index(source, self.vocabulary, self.source_maxlen)
-            target_len, target_tokens = trigram_sentence_to_padding_index(target, self.vocabulary, self.target_maxlen)
-            if source_len and target_len:
-                sender.send_pyobj((source_tokens, source_len, target_tokens, target_len, label))
+            self.batch_data.parse_and_insert_data_object(source, target, label)
+            if self.batch_data.data_object_length == self.batch_size:
+                sender.send_pyobj(self.batch_data.data_object)
         pull_stream.on_recv(_on_recv)
         loop.start()
 

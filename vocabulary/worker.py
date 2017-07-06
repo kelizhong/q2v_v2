@@ -1,5 +1,5 @@
 # coding=utf-8
-"""Worker process which receiver the sentence from ventilitor process and tokenize it"""
+"""Worker process which receiver the sentence from ventilator process and tokenize it"""
 import logbook as logging
 from multiprocessing import Process
 import zmq
@@ -10,7 +10,7 @@ from utils.retry_util import retry
 
 
 class WorkerProcess(Process):
-    """Worker process which receiver the sentence from ventilitor process and tokenize it
+    """Worker process which receiver the sentence from ventilator process and tokenize it
     Parameters
     ----------
         ip : str

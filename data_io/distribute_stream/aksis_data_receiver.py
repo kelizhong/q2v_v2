@@ -20,7 +20,7 @@ class AksisDataReceiver(object):
             the StopIteration, the trainer will save the checkpoint. If stop_freq < 0,
             will not raise the StopIteration error
     """
-    def __init__(self, ip=None, port=5556, stop_freq=-1):
+    def __init__(self, ip=None, port=5558, stop_freq=-1):
         context = zmq.Context()
         # pylint: disable=no-member
         ip = ip or local_ip()
@@ -33,7 +33,7 @@ class AksisDataReceiver(object):
         return self
 
     @with_meter('aksis_data_receiver', interval=30)
-    def next(self):
+    def __next__(self):
         """return the data from collector"""
         if 0 < self.stop_freq < self.num:
             raise StopIteration

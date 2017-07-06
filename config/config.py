@@ -48,8 +48,8 @@ tf.app.flags.DEFINE_string("gpu", None, "specify the gpu to use")
 
 tf.app.flags.DEFINE_string("log_file_name", os.path.join(project_dir, 'data/logs', 'q2v.log'), "Log data file name")
 tf.app.flags.DEFINE_integer("data_stream_port", None, "port for data zmq stream")
-tf.app.flags.DEFINE_string("raw_data_path", './data/rawdata/test.add', "port for data zmq stream")
-tf.app.flags.DEFINE_string("vocabulary_data_dir", './data/vocabulary', "port for data zmq stream")
+tf.app.flags.DEFINE_string("raw_data_path", os.path.join(project_dir, 'data/rawdata', 'test.add'), "port for data zmq stream")
+tf.app.flags.DEFINE_string("vocabulary_data_dir", os.path.join(project_dir, 'data/vocabulary'), "port for data zmq stream")
 
 # For distributed
 # cluster specification
