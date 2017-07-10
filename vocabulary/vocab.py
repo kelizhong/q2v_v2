@@ -230,7 +230,7 @@ class VocabularyFromCustomStringTrigram(VocabularyBase):
     def build_vocabulary_from_pickle(self, string=None):
         # Load vocabulary
 
-        if string:
+        if not string:
             self.build_words_frequency_counter(string)
         logging.info("Loading vocabulary")
         vocab = super(VocabularyFromCustomStringTrigram, self).build_vocabulary_from_pickle()

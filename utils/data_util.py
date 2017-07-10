@@ -1,19 +1,20 @@
 # coding=utf-8
 """util for data processing"""
 import os
+import sys
 import re
 import codecs
 import string
 import random
 from nltk import word_tokenize
 from nltk.stem import WordNetLemmatizer
-from utils.pickle_util import load_pickle_object, save_obj_pickle
+from utils.pickle_util import save_obj_pickle
 from utils.cache_util import RandomSet
 from enum import Enum, unique
 from collections import Counter
 import numpy as np
 from itertools import chain
-
+from config.config import end_token
 
 wn_lemmatizer = WordNetLemmatizer()
 
@@ -282,25 +283,86 @@ def find_ngrams(input_list, n):
     return zip(*[input_list[i:] for i in range(n)])
 
 
-def trigram_encoding(data, trigram_dict):
-    if not data:
-        return None, []
-    data = re.sub('[^a-z0-9.&\\ ]+', '', data.lower())
-    data_seq = data.split()
-    if len(data_seq) <= 2:  # remove query that are shorter than 3 words
-        # raise Exception("trigram_encoding: the length of data should larger than 2 words, error data: %s" % data)
-        return None, []
+def trigram_encoding(data, trigram_dict, return_data=True):
+    if data is None or len(data.strip()) == 0:
+        data_triagrams_index = list()
+        data = None
+    else:
+        data = re.sub('[^a-z0-9.&\\ ]+', '', data.strip().lower())
+        data_seq = data.split()
+        data_triagrams = list(chain(*[find_ngrams("#" + qw + "#", 3) for qw in data_seq]))
+        data_triagrams_index = [trigram_dict[d] if d in trigram_dict else len(trigram_dict) + 1 for d in data_triagrams]
+    result = data_triagrams_index, data if return_data else data_triagrams_index
+    return result
 
-    data_triagrams = list(chain(*[find_ngrams("#" + qw + "#", 3) for qw in data_seq]))
-    data_triagrams_index = [trigram_dict[d] if d in trigram_dict else len(trigram_dict) + 1 for d in data_triagrams]
-    return data, data_triagrams_index
+
+# batch preparation of a given sequence pair for training
+def prepare_train_pair_batch(seqs_x, seqs_y, source_maxlen=sys.maxsize, target_maxlen=sys.maxsize, dtype='int32'):
+    # seqs_x, seqs_y: a list of sentences
+    lengths_x = [len(s) for s in seqs_x]
+    lengths_y = [len(s) for s in seqs_y]
+
+    new_seqs_x = []
+    new_seqs_y = []
+    new_lengths_x = []
+    new_lengths_y = []
+    for l_x, s_x, l_y, s_y in zip(lengths_x, seqs_x, lengths_y, seqs_y):
+        if l_x <= source_maxlen and l_y <= target_maxlen:
+            new_seqs_x.append(s_x)
+            new_lengths_x.append(l_x)
+            new_seqs_y.append(s_y)
+            new_lengths_y.append(l_y)
+    lengths_x = new_lengths_x
+    seqs_x = new_seqs_x
+    lengths_y = new_lengths_y
+    seqs_y = new_seqs_y
+
+    if len(lengths_x) < 1 or len(lengths_y) < 1:
+        return None, None, None, None
+
+    batch_size = len(seqs_x)
+
+    x_lengths = np.array(lengths_x)
+    y_lengths = np.array(lengths_y)
+
+    maxlen_x = np.max(x_lengths)
+    maxlen_y = np.max(y_lengths)
+
+    x = np.ones((batch_size, maxlen_x)).astype(dtype) * end_token
+    y = np.ones((batch_size, maxlen_y)).astype(dtype) * end_token
+
+    for idx, [s_x, s_y] in enumerate(zip(seqs_x, seqs_y)):
+        x[idx, :lengths_x[idx]] = s_x
+        y[idx, :lengths_y[idx]] = s_y
+    return x, x_lengths, y, y_lengths
 
 
-def trigram_sentence_to_padding_index(sentence, trigram_dict, maxlen):
-    try:
-        sentence, index = trigram_encoding(sentence, trigram_dict)
-    except Exception as e:
-        return 0, None, []
-    original_len = min(len(index), maxlen)
-    index = pad_sequences(np.array([index]), padding='post', truncating='post', maxlen=maxlen)
-    return original_len, sentence, index[0]
+# batch preparation of a given sequence for embedding or decoder
+def prepare_train_batch(seqs, maxlen=None, dtype='int32'):
+    # seqs_x, seqs_y: a list of sentences
+    lengths = [len(s) for s in seqs]
+
+    if maxlen is not None:
+        new_seqs = []
+        new_lengths = []
+        for l, s in zip(lengths, seqs):
+            if l <= maxlen:
+                new_seqs.append(s)
+                new_lengths.append(l)
+        lengths = new_lengths
+        seqs = new_seqs
+
+        if len(lengths) < 1:
+            return None, None
+
+    batch_size = len(seqs)
+
+    lengths = np.array(lengths)
+
+    maxlen = np.max(lengths)
+
+    x = np.ones((batch_size, maxlen)).astype(dtype) * end_token
+
+    for idx, seq in enumerate(seqs):
+        x[idx, :lengths[idx]] = seq
+    return x, lengths

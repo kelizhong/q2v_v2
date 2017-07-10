@@ -12,6 +12,7 @@ from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.decorators import socket
 from ..batch_data_handler import BatchDataTrigramHandler
+from config.config import special_words
 
 
 class AksisParserWorker(Process):
@@ -44,7 +45,7 @@ class AksisParserWorker(Process):
         self.batch_size = batch_size
         self.source_maxlen = source_maxlen
         self.target_maxlen = target_maxlen
-        self.batch_data = BatchDataTrigramHandler(self.vocabulary, source_maxlen, target_maxlen, batch_size)
+        self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size)
 
     # pylint: disable=no-member
     @socket(zmq.PULL)
@@ -71,6 +72,6 @@ class AksisParserWorker(Process):
     def vocabulary(self):
         """load vocabulary"""
         logging.info("loading vocabulary for process {}", self.name)
-        vocab = VocabularyFromCustomStringTrigram(self.vocabulary_data_dir, top_words=self.top_words).build_vocabulary_from_pickle()
+        vocab = VocabularyFromCustomStringTrigram(self.vocabulary_data_dir, special_words=special_words, top_words=self.top_words).build_vocabulary_from_pickle()
         return vocab
 

@@ -26,6 +26,7 @@ import os
 # https://github.com/tensorflow/tensorflow/commit/ec1403e7dc2b919531e527d36d28659f60621c9e
 # os.environ['TF_CPP_MIN_VLOG_LEVEL']='3'
 import numpy as np
+import math
 from collections import defaultdict
 from config.config import FLAGS
 from data_io.distribute_stream.aksis_data_receiver import AksisDataReceiver
@@ -33,21 +34,22 @@ from data_io.single_stream.aksis_data_stream import AksisDataStream
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
 from utils.log_util import setup_logger
+from utils.data_util import prepare_train_pair_batch
 
 
 class Trainer(object):
     def __init__(self, job_name, ps_hosts, worker_hosts, task_index, gpu, model_dir, is_sync, raw_data_path, batch_size,
-                 steps_per_checkpoint,
+                 display_freq, model_name='q2v',
                  source_max_seq_length=None, target_max_seq_length=None, top_words=None, vocabulary_data_dir=None, port=None):
         self.job_name = job_name
         self.ps_hosts = ps_hosts.split(",")
         self.worker_hosts = worker_hosts.split(",")
         self.task_index = task_index
         self.gpu = gpu
-        self.model_dir = model_dir
+        self.model_dir = os.path.join(model_dir, model_name)
         self.is_sync = is_sync
         self.raw_data_path = raw_data_path
-        self.steps_per_checkpoint = steps_per_checkpoint
+        self.display_freq = display_freq
         self.batch_size = batch_size
         self.source_max_seq_length = source_max_seq_length
         self.target_max_seq_length = target_max_seq_length
@@ -104,7 +106,7 @@ class Trainer(object):
 
     @property
     def data_local_stream(self):
-        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words, source_max_seq_length=self.source_max_seq_length, target_max_seq_length=self.target_max_seq_length,
+        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words,
                                       batch_size=self.batch_size,
                                       raw_data_path=self.raw_data_path).generate_batch_data()
         return data_stream
@@ -134,7 +136,7 @@ class Trainer(object):
             with tf.device(self.device):
                 with tf.Session(target=self.master,
                                 config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-                    model = create_model(sess, False)
+                    model = create_model(sess)
                 self._log_variable_info()
                 summary_op = tf.summary.merge_all()
                 init_op = tf.global_variables_initializer()
@@ -154,28 +156,42 @@ class Trainer(object):
                 # setup tensorboard logging
                 # sw = tf.summary.FileWriter(FLAGS.model_dir, sess.graph, flush_secs=120)
 
-                # 如果是同步模式
                 if self.task_index == 0 and self.is_sync:
                     sv.start_queue_runners(sess, [model.chief_queue_runner])
                     sess.run(model.init_token_op)
 
                 step_time, loss = 0.0, 0.0
+                words_done, sents_done = 0, 0
                 data_stream = self.data_stream
-                for current_step, (sources, source_lens, targets, target_lens, labels) in enumerate(data_stream):
+                for _, source_tokens, _, target_tokens, labels in data_stream:
                     start_time = time.time()
+                    source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens)
+                    # Get a batch from training parallel data
+                    if len(source_tokens) == 0 or len(target_tokens) == 0:
+                        logging.warn('No samples under max_seq_length {}', FLAGS.max_seq_length)
+                        continue
 
-                    step_loss, _ = model.step(sess, sources, source_lens, targets, target_lens, labels)
-                    step_time += (time.time() - start_time) / self.steps_per_checkpoint
-                    loss += step_loss / self.steps_per_checkpoint
+                    # Execute a single training step
+                    step_loss = model.train(sess, src_inputs=source_tokens, src_inputs_length=source_lens,
+                                            tgt_inputs=target_tokens, tgt_inputs_length=target_lens, labels=labels)
+                    time_elapsed = time.time() - start_time
+                    step_time = time_elapsed / self.display_freq
+                    loss += step_loss / self.display_freq
+                    words_done += float(np.sum(source_lens + target_lens))
+                    sents_done += float(source_tokens.shape[0])  # batch_size
 
-                    # loss_summary = tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=loss)])
-                    # sw.add_summary(loss_summary, current_step)
-                    # Once in a while, print statistics, and run evals.
-                    if current_step % self.steps_per_checkpoint == 0:
-                        logging.info("global step %d, learning rate %.4f step-time:%.2f step-loss:%.4f loss:%.4f" %
-                                     (model.global_step.eval(), model.learning_rate, step_time, step_loss, loss))
+                    # Increase the epoch index of the model
+                    model.global_epoch_step_op.eval()
+                    if model.global_step.eval() % self.display_freq == 0:
+                        avg_perplexity = math.exp(float(loss)) if loss < 300 else float("inf")
+                        words_per_sec = words_done / time_elapsed
+                        sents_per_sec = sents_done / time_elapsed
+                        logging.info(
+                            "global step %d, learning rate %.4f, step-time:%.2f, step-loss:%.4f, loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
+                            (model.global_step.eval(), model.learning_rate, step_time, step_loss, loss, avg_perplexity,
+                             sents_per_sec, words_per_sec))
                         # set zero timer and loss.
-                        step_time, loss = 0.0, 0.0
+                        words_done, sents_done, loss = 0.0, 0.0, 0.0
 
             sv.stop()
 
@@ -189,7 +205,7 @@ def main(_):
                       ps_hosts=FLAGS.ps_hosts, worker_hosts=FLAGS.worker_hosts, task_index=FLAGS.task_index,
                       gpu=FLAGS.gpu,
                       model_dir=FLAGS.model_dir, is_sync=FLAGS.is_sync, batch_size=FLAGS.batch_size,
-                      steps_per_checkpoint=FLAGS.steps_per_checkpoint)
+                      display_freq=FLAGS.display_freq)
     trainer.train()
 
 

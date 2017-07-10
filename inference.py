@@ -7,6 +7,7 @@ from utils.decorator_util import memoized
 from vocabulary.vocab import VocabularyFromCustomStringTrigram
 from config.config import FLAGS
 from utils.math_util import cos_distance
+from utils.data_util import prepare_train_batch
 import numpy as np
 from tensorflow.contrib.tensorboard.plugins import projector
 
@@ -15,23 +16,25 @@ class Inference(object):
     def __init__(self):
         self.sess = tf.Session()
         self.model = self._init_model()
-        self.batch_data = BatchDataTrigramHandler(self.vocabulary, source_maxlen=FLAGS.source_max_seq_length, target_maxlen=FLAGS.target_max_seq_length, batch_size=sys.maxsize)
+        self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size=sys.maxsize)
         self.batch_size = 2
 
     def _init_model(self):
-        model = create_model(self.sess, True)
-        model.batch_size = 1
+        model = create_model(self.sess, mode='encode')
         return model
 
     def encode(self, inputs):
-        self.batch_data.clear_data_object()
         sources = None
         source_tokens = []
         self.batch_data.clear_data_object()
         for each in inputs:
-            sources, source_tokens, source_lens, targets, target_tokens, target_lens, labels = self.batch_data.parse_and_insert_data_object(each, None)
-        step_loss, vec = self.model.step(self.sess, source_tokens, source_lens, target_tokens, target_lens, labels)
-        return sources, vec
+            sources, source_tokens, _, _, _ = self.batch_data.parse_and_insert_data_object(each, None)
+        source_tokens, source_lens = prepare_train_batch(source_tokens)
+        vectors = None
+        if len(source_tokens) > 0:
+            vectors = self.model.encode(self.sess, source_tokens, source_lens)
+
+        return sources, vectors
 
     def batch_encode(self, file):
         model_path = os.path.join(FLAGS.model_dir, "embedding")
@@ -86,7 +89,7 @@ def main(_):
     i = Inference()
     i.batch_encode('source')
     #  print(cos_distance(i.encode(["nike shoe men"]), i.encode("apple shoe men")))
-    # print(i.encode(["nike shoe men"]))
+    print(i.encode(["nike shoe men"]))
 
 
 if __name__ == "__main__":
