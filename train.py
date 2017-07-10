@@ -165,7 +165,7 @@ class Trainer(object):
                 data_stream = self.data_stream
                 for _, source_tokens, _, target_tokens, labels in data_stream:
                     start_time = time.time()
-                    source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, self.source_maxlen, self.target_maxlen)
+                    source_tokens, source_lens, target_tokens, target_lens, labels = prepare_train_pair_batch(source_tokens, target_tokens, labels, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                     # Get a batch from training parallel data
                     if len(source_tokens) == 0 or len(target_tokens) == 0:
                         logging.warn('No samples under max_seq_length {}', FLAGS.max_seq_length)
