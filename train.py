@@ -40,7 +40,7 @@ from utils.data_util import prepare_train_pair_batch
 class Trainer(object):
     def __init__(self, job_name, ps_hosts, worker_hosts, task_index, gpu, model_dir, is_sync, raw_data_path, batch_size,
                  display_freq, model_name='q2v',
-                 source_max_seq_length=None, target_max_seq_length=None, top_words=None, vocabulary_data_dir=None, port=None):
+                 source_maxlen=None, target_maxlen=None, top_words=None, vocabulary_data_dir=None, port=None):
         self.job_name = job_name
         self.ps_hosts = ps_hosts.split(",")
         self.worker_hosts = worker_hosts.split(",")
@@ -51,8 +51,8 @@ class Trainer(object):
         self.raw_data_path = raw_data_path
         self.display_freq = display_freq
         self.batch_size = batch_size
-        self.source_max_seq_length = source_max_seq_length
-        self.target_max_seq_length = target_max_seq_length
+        self.source_maxlen = source_maxlen
+        self.target_maxlen = target_maxlen
         self.top_words = top_words
         self.vocabulary_data_dir = vocabulary_data_dir
         self.port = port
@@ -165,7 +165,7 @@ class Trainer(object):
                 data_stream = self.data_stream
                 for _, source_tokens, _, target_tokens, labels in data_stream:
                     start_time = time.time()
-                    source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens)
+                    source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, self.source_maxlen, self.target_maxlen)
                     # Get a batch from training parallel data
                     if len(source_tokens) == 0 or len(target_tokens) == 0:
                         logging.warn('No samples under max_seq_length {}', FLAGS.max_seq_length)
@@ -200,7 +200,7 @@ def main(_):
     setup_logger(FLAGS.log_file_name)
     trainer = Trainer(raw_data_path=FLAGS.raw_data_path,
                       vocabulary_data_dir=FLAGS.vocabulary_data_dir,
-                      port=FLAGS.data_stream_port, top_words=FLAGS.max_vocabulary_size, source_max_seq_length=FLAGS.source_max_seq_length, target_max_seq_length=FLAGS.target_max_seq_length,
+                      port=FLAGS.data_stream_port, top_words=FLAGS.max_vocabulary_size, source_maxlen=FLAGS.source_maxlen, target_maxlen=FLAGS.target_maxlen,
                       job_name=FLAGS.job_name,
                       ps_hosts=FLAGS.ps_hosts, worker_hosts=FLAGS.worker_hosts, task_index=FLAGS.task_index,
                       gpu=FLAGS.gpu,
