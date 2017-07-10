@@ -30,8 +30,6 @@ class AksisDataPipeline(object):
             aksis.search, aksis.purchase and aksis.click, each file store the corresponding data,
             than can use these four patterns(*add, *search, *purchase, *click) to read the related
             file
-        buckets: tuple list
-            The buckets for seq2seq model, a list with (encoder length, decoder length)
         batch_size: int
             Batch size for each databatch
         ip : str

@@ -7,7 +7,7 @@ from external.cocob_optimizer import COCOB
 class Q2VModel(object):
     def __init__(self, source_max_seq_length, target_max_seq_length, vocab_size, word_embed_size, seq_embed_size,
                  num_layers, src_cell_size,
-                 tgt_cell_size, batch_size, learning_rate, max_gradient_norm, worker_hosts=None, is_sync=0,
+                 tgt_cell_size, learning_rate, max_gradient_norm, worker_hosts=None, is_sync=0,
                  use_lstm=True):
         self.source_max_seq_length = source_max_seq_length
         self.target_max_seq_length = target_max_seq_length
@@ -17,7 +17,6 @@ class Q2VModel(object):
         self.num_layers = num_layers
         self.src_cell_size = src_cell_size
         self.tgt_cell_size = tgt_cell_size
-        self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.max_gradient_norm = max_gradient_norm
 
@@ -41,6 +40,9 @@ class Q2VModel(object):
 
         self.source_partitions = tf.placeholder(tf.int32, [None])
         self.target_partitions = tf.placeholder(tf.int32, [None])
+
+        # get dynamic batch_size
+        self.batch_size = tf.to_float(tf.shape(self._src_input_data)[0])
 
         # global step variable
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -202,7 +204,9 @@ class Q2VModel(object):
         """ Saves variables to given path """
         return self.saver.save(session, path, global_step)
 
-    def generate_partition(self, batch_size, seqlen, max_seq_length):
+    @staticmethod
+    def _generate_partition(seqlen, max_seq_length):
+        batch_size = len(seqlen)
         partitions = [0] * (batch_size * max_seq_length)
         step = 0
         for each in seqlen:
@@ -212,8 +216,8 @@ class Q2VModel(object):
         return partitions
 
     def step(self, session, sources, source_lens, targets, target_lens, labels, source_embedding=True):
-        source_partitions = self.generate_partition(self.batch_size, source_lens, self.source_max_seq_length)
-        target_partitions = self.generate_partition(self.batch_size, target_lens, self.target_max_seq_length)
+        source_partitions = self._generate_partition(source_lens, self.source_max_seq_length)
+        target_partitions = self._generate_partition(target_lens, self.target_max_seq_length)
         feed_dict = self.get_train_feed_dict(sources, source_lens, targets, target_lens, labels,
                                              source_partitions, target_partitions)
         ops = [self.train, self.loss]

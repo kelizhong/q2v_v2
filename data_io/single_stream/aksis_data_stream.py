@@ -5,7 +5,7 @@ from utils.decorator_util import memoized
 
 
 class AksisDataStream(object):
-    def __init__(self, vocabulary_data_dir, top_words, special_words, source_max_seq_length, target_max_seq_length, batch_size, raw_data_path=None, stop_freq=-1):
+    def __init__(self, vocabulary_data_dir, top_words, source_max_seq_length, target_max_seq_length, batch_size, raw_data_path=None, stop_freq=-1):
         self.stop_freq = stop_freq
         self.batch_size = batch_size
         self.raw_data_path = raw_data_path

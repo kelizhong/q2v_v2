@@ -21,8 +21,6 @@ class AksisDataCollector(Process):
     ----------
         ip : str
             The ip address string without the port to pass to ``Socket.bind()``.
-        buckets: tuple list
-            The buckets for seq2seq model, a list with (encoder length, decoder length)
         batch_size: int
             Batch size for each databatch
         frontend_port: int
@@ -61,7 +59,6 @@ class AksisDataCollector(Process):
         ioloop.install()
         loop = ioloop.IOLoop.instance()
         pull_stream = ZMQStream(receiver, loop)
-
 
         def _on_recv(msg):
             # accept the msg and add to the bucket queue and send the batch data to trainer

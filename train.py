@@ -27,7 +27,6 @@ import os
 # os.environ['TF_CPP_MIN_VLOG_LEVEL']='3'
 import numpy as np
 from collections import defaultdict
-from common.constant import special_words
 from config.config import FLAGS
 from data_io.distribute_stream.aksis_data_receiver import AksisDataReceiver
 from data_io.single_stream.aksis_data_stream import AksisDataStream
@@ -39,7 +38,7 @@ from utils.log_util import setup_logger
 class Trainer(object):
     def __init__(self, job_name, ps_hosts, worker_hosts, task_index, gpu, model_dir, is_sync, raw_data_path, batch_size,
                  steps_per_checkpoint,
-                 source_max_seq_length=None, target_max_seq_length=None, special_words=None, top_words=None, vocabulary_data_dir=None, port=None):
+                 source_max_seq_length=None, target_max_seq_length=None, top_words=None, vocabulary_data_dir=None, port=None):
         self.job_name = job_name
         self.ps_hosts = ps_hosts.split(",")
         self.worker_hosts = worker_hosts.split(",")
@@ -52,7 +51,6 @@ class Trainer(object):
         self.batch_size = batch_size
         self.source_max_seq_length = source_max_seq_length
         self.target_max_seq_length = target_max_seq_length
-        self.special_words = special_words
         self.top_words = top_words
         self.vocabulary_data_dir = vocabulary_data_dir
         self.port = port
@@ -106,8 +104,7 @@ class Trainer(object):
 
     @property
     def data_local_stream(self):
-        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words,
-                                      special_words=self.special_words, source_max_seq_length=self.source_max_seq_length, target_max_seq_length=self.target_max_seq_length,
+        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words, source_max_seq_length=self.source_max_seq_length, target_max_seq_length=self.target_max_seq_length,
                                       batch_size=self.batch_size,
                                       raw_data_path=self.raw_data_path).generate_batch_data()
         return data_stream
@@ -185,7 +182,7 @@ class Trainer(object):
 
 def main(_):
     setup_logger(FLAGS.log_file_name)
-    trainer = Trainer(special_words=special_words, raw_data_path=FLAGS.raw_data_path,
+    trainer = Trainer(raw_data_path=FLAGS.raw_data_path,
                       vocabulary_data_dir=FLAGS.vocabulary_data_dir,
                       port=FLAGS.data_stream_port, top_words=FLAGS.max_vocabulary_size, source_max_seq_length=FLAGS.source_max_seq_length, target_max_seq_length=FLAGS.target_max_seq_length,
                       job_name=FLAGS.job_name,

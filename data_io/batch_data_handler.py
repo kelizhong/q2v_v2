@@ -23,7 +23,7 @@ class BatchDataHandler(object):
         self.vocabulary = vocabulary
         self.source_maxlen = source_maxlen
         self.target_maxlen = target_maxlen
-        self._sources, self._source_lens, self._targets, self._target_lens, self._labels = [], [], [], [], []
+        self._sources, self._source_lens, self._source_tokens, self._targets, self._target_lens, self._target_tokens, self._labels = [], [], [], [], [], [], []
 
     @property
     def data_object_length(self):
@@ -34,27 +34,31 @@ class BatchDataHandler(object):
         """parse data using trigram parser, insert it to data_object to generate batch data"""
         raise NotImplementedError
 
-    def insert_data_object(self, source_tokens, source_len, target_tokens, target_len, label_id):
+    def insert_data_object(self, sources, source_tokens, source_len, targets, target_tokens, target_len, label_id):
         if self.data_object_length == self.batch_size:
             self.clear_data_object()
-        if source_len and target_len:
-            self._sources.append(source_tokens)
+        if source_len:
+            self._sources.append(sources)
+            self._source_tokens.append(source_tokens)
             self._source_lens.append(source_len)
-            self._targets.append(target_tokens)
+            self._targets.append(targets)
+            self._target_tokens.append(target_tokens)
             self._target_lens.append(target_len)
             self._labels.append(label_id)
         return self.data_object
 
     def clear_data_object(self):
         del self._sources[:]
+        del self._source_tokens[:]
         del self._source_lens[:]
         del self._targets[:]
+        del self._target_tokens[:]
         del self._target_lens[:]
         del self._labels[:]
 
     @property
     def data_object(self):
-        return self._sources, self._source_lens, self._targets, self._target_lens, self._labels
+        return self._sources, self._source_tokens, self._source_lens, self._targets, self._target_tokens, self._target_lens, self._labels
 
 
 class BatchDataTrigramHandler(BatchDataHandler):
@@ -76,7 +80,7 @@ class BatchDataTrigramHandler(BatchDataHandler):
 
     def parse_and_insert_data_object(self, source, target, label=1):
         """parse data using trigram parser, insert it to data_object to generate batch data"""
-        source_len, source_tokens = trigram_sentence_to_padding_index(source, self.vocabulary, self.source_maxlen)
-        target_len, target_tokens = trigram_sentence_to_padding_index(target, self.vocabulary, self.target_maxlen)
-        data_object = self.insert_data_object(source_tokens, source_len, target_tokens, target_len, label)
+        source_len, source, source_tokens = trigram_sentence_to_padding_index(source, self.vocabulary, self.source_maxlen)
+        target_len, target, target_tokens = trigram_sentence_to_padding_index(target, self.vocabulary, self.target_maxlen)
+        data_object = self.insert_data_object(source, source_tokens, source_len, target, target_tokens, target_len, label)
         return data_object

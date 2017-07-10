@@ -283,21 +283,24 @@ def find_ngrams(input_list, n):
 
 
 def trigram_encoding(data, trigram_dict):
+    if not data:
+        return None, []
     data = re.sub('[^a-z0-9.&\\ ]+', '', data.lower())
     data_seq = data.split()
     if len(data_seq) <= 2:  # remove query that are shorter than 3 words
-        raise Exception("trigram_encoding: the length of data should larger than 2 words, error data: %s" % data)
+        # raise Exception("trigram_encoding: the length of data should larger than 2 words, error data: %s" % data)
+        return None, []
 
     data_triagrams = list(chain(*[find_ngrams("#" + qw + "#", 3) for qw in data_seq]))
     data_triagrams_index = [trigram_dict[d] if d in trigram_dict else len(trigram_dict) + 1 for d in data_triagrams]
-    return data_triagrams_index
+    return data, data_triagrams_index
 
 
 def trigram_sentence_to_padding_index(sentence, trigram_dict, maxlen):
     try:
-        index = trigram_encoding(sentence, trigram_dict)
+        sentence, index = trigram_encoding(sentence, trigram_dict)
     except Exception as e:
-        return 0, []
+        return 0, None, []
     original_len = min(len(index), maxlen)
     index = pad_sequences(np.array([index]), padding='post', truncating='post', maxlen=maxlen)
-    return original_len, index[0]
+    return original_len, sentence, index[0]
