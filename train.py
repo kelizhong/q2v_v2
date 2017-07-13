@@ -193,7 +193,7 @@ class Trainer(object):
                         words_per_sec = words_done / time_elapsed
                         sents_per_sec = sents_done / time_elapsed
                         logging.info(
-                            "global step %d, learning rate %.4f, step-time:%.2f, step-loss:%.4f, loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
+                            "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.4f, loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
                             (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, loss, avg_perplexity,
                              sents_per_sec, words_per_sec))
                         # set zero timer and loss.

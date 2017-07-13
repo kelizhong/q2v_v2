@@ -54,9 +54,9 @@ tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
 tf.app.flags.DEFINE_boolean("is_sync", True, "whether to synchronize, aggregate gradients")
 
 # Training parameters
-tf.app.flags.DEFINE_float('learning_rate', 0.01, 'Learning rate')
-tf.app.flags.DEFINE_float('min_learning_rate', 0.00002, 'minimum Learning rate')
-tf.app.flags.DEFINE_integer('decay_steps', 20000, 'how many steps to update the learning rate.')
+tf.app.flags.DEFINE_float('learning_rate', 0.1, 'Learning rate')
+tf.app.flags.DEFINE_float('min_learning_rate', 0.0002, 'minimum Learning rate')
+tf.app.flags.DEFINE_integer('decay_steps', 10000, 'how many steps to update the learning rate.')
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.99, "Learning rate decays by this much.")
 
 FLAGS = tf.app.flags.FLAGS

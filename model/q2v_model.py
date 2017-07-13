@@ -332,7 +332,7 @@ class Q2VModel(object):
         """
         Builds graph to minimize loss function.
         """
-        print("setting optimizer..")
+        logging.info("setting optimizer..")
         # Gradients and SGD update operation for training the model
         trainable_params = tf.trainable_variables()
         if self.optimizer.lower() == 'adadelta':
