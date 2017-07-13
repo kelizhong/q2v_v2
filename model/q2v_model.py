@@ -4,7 +4,7 @@ import math
 import tensorflow as tf
 from tensorflow.python.layers.core import Dense
 from tensorflow.python.ops.rnn_cell import GRUCell
-from tensorflow.python.ops.rnn_cell import LSTMCell
+from tensorflow.python.ops.rnn_cell import LSTMCell, LSTMStateTuple
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
 
@@ -20,6 +20,10 @@ class Q2VModel(object):
         self.config = config
         self.mode = mode.lower()
 
+        self.job_name = config['job_name']
+        self.worker_hosts_size = len(config['worker_hosts'].split(",")) if config['worker_hosts'] else 0
+
+        self.bidirectional = config['bidirectional']
         self.dtype = tf.float16 if config['use_fp16'] else tf.float32
         self.num_layers = config['num_layers']
         self.cell_type = config['cell_type']
@@ -32,12 +36,20 @@ class Q2VModel(object):
         self.max_vocabulary_size = config['max_vocabulary_size']
         self.embedding_size = config['embedding_size']
 
-        self.learning_rate = config['learning_rate']
         self.optimizer = config['optimizer']
         self.max_gradient_norm = config['max_gradient_norm']
 
         self.is_sync = config['is_sync']
         self.worker_hosts = config['worker_hosts']
+
+        self.global_step = tf.Variable(0, trainable=False, name='global_step')
+        self.global_epoch_step = tf.Variable(0, trainable=False, name='global_epoch_step')
+        self.global_epoch_step_op = \
+            tf.assign(self.global_epoch_step, self.global_epoch_step + 1)
+
+        self.learning_rate = tf.maximum(
+            config['min_learning_rate'],  # min_lr_rate.
+            tf.train.exponential_decay(config['learning_rate'], self.global_step, config['decay_steps'], config['lr_decay_factor']))
 
         # List of operations to be called after each training step, see
         # _add_post_train_ops
@@ -58,10 +70,6 @@ class Q2VModel(object):
     def init_placeholders(self):
 
         self.keep_prob_placeholder = tf.placeholder(self.dtype, shape=[], name='keep_prob')
-        self.global_step = tf.Variable(0, trainable=False, name='global_step')
-        self.global_epoch_step = tf.Variable(0, trainable=False, name='global_epoch_step')
-        self.global_epoch_step_op = \
-            tf.assign(self.global_epoch_step, self.global_epoch_step + 1)
 
         # TODO use MutableHashTable to store word->id mapping in checkpoint
         # source_inputs: [batch_size, max_time_steps]
@@ -110,20 +118,14 @@ class Q2VModel(object):
 
     def build_source_encoder(self):
         logging.info("building source encoder..")
-        with tf.variable_scope('shared_encoder'):
-            # Building encoder_cell
-            self.src_cell = self.build_encoder_cell()
-
-            # Initialize encoder_embeddings to have variance=1.
-            sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
-            initializer = tf.random_uniform_initializer(-sqrt3, sqrt3, dtype=self.dtype)
+        with tf.variable_scope('shared_encoder', dtype=self.dtype) as scope:
 
             self.src_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.max_vocabulary_size, self.embedding_size],
-                                                      initializer=initializer, dtype=self.dtype)
+                                                      initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
-            self.src_inputs_embedded = tf.nn.embedding_lookup(
+            src_inputs_embedded = tf.nn.embedding_lookup(
                 params=self.src_embeddings, ids=self.src_inputs)
 
             # Input projection layer to feed embedded inputs to the cell
@@ -131,34 +133,56 @@ class Q2VModel(object):
             input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
 
             # Embedded inputs having gone through input projection layer
-            self.src_inputs_embedded = input_layer(self.src_inputs_embedded)
+            src_inputs_embedded = input_layer(src_inputs_embedded)
 
-            # Encode input sequences into context vectors:
-            # encoder_outputs: [batch_size, max_time_step, cell_output_size]
-            # encoder_state: [batch_size, cell_output_size]
-            self.src_outputs, self.src_encoder_last_state = tf.nn.dynamic_rnn(
-                cell=self.src_cell, inputs=self.src_inputs_embedded,
-                sequence_length=self.src_inputs_length, dtype=self.dtype,
-                time_major=False)
+            if self.bidirectional:
+                logging.info("building bidirectional encoder..")
+                fw_encoder_cell = self.build_encoder_cell()
+                bw_encoder_cell = self.build_encoder_cell()
+                self.src_outputs, self.src_last_state = tf.nn.bidirectional_dynamic_rnn(
+                    cell_fw=fw_encoder_cell, cell_bw=bw_encoder_cell,
+                    inputs=src_inputs_embedded,
+                    sequence_length=self.src_inputs_length,
+                    time_major=False,
+                    dtype=self.dtype,
+                    parallel_iterations=16,
+                    scope=scope)
 
-            self.src_last_output = self._last_output(self.src_outputs, self.src_cell.output_size, self.src_partitions)
+                fw_state, bw_state = self.src_last_state
+                self.src_last_state = []
+                for f, b in zip(fw_state, bw_state):
+                    if isinstance(f, LSTMStateTuple):
+                        self.src_last_state.append(LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
+                    else:
+                        self.src_last_state.append(tf.concat([f, b], 1))
+                self.src_outputs = tf.concat([self.src_outputs[0], self.src_outputs[1]], axis=2)
+                output_size = fw_encoder_cell.output_size + bw_encoder_cell.output_size
+
+            else:
+                logging.info("building encoder..")
+                # Building encoder_cell
+                src_cell = self.build_encoder_cell()
+                # Encode input sequences into context vectors:
+                # encoder_outputs: [batch_size, max_time_step, cell_output_size]
+                # encoder_state: [batch_size, cell_output_size]
+                self.src_outputs, self.src_encoder_last_state = tf.nn.dynamic_rnn(
+                    cell=src_cell, inputs=src_inputs_embedded,
+                    sequence_length=self.src_inputs_length, dtype=self.dtype,
+                    time_major=False)
+                output_size = src_cell.output_size
+
+            self.src_last_output = self._last_output(self.src_outputs, output_size, self.src_partitions)
 
     def build_target_encoder(self):
         logging.info("building target encoder..")
-        with tf.variable_scope('shared_encoder', reuse=True):
-            # Building encoder_cell
-            self.tgt_cell = self.build_encoder_cell()
-
-            # Initialize encoder_embeddings to have variance=1.
-            sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
-            initializer = tf.random_uniform_initializer(-sqrt3, sqrt3, dtype=self.dtype)
+        with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
 
             self.tgt_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.max_vocabulary_size, self.embedding_size],
-                                                      initializer=initializer, dtype=self.dtype)
+                                                      initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
-            self.tgt_inputs_embedded = tf.nn.embedding_lookup(
+            tgt_inputs_embedded = tf.nn.embedding_lookup(
                 params=self.tgt_embeddings, ids=self.tgt_inputs)
 
             # Input projection layer to feed embedded inputs to the cell
@@ -166,17 +190,45 @@ class Q2VModel(object):
             input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
 
             # Embedded inputs having gone through input projection layer
-            self.tgt_inputs_embedded = input_layer(self.tgt_inputs_embedded)
+            tgt_inputs_embedded = input_layer(tgt_inputs_embedded)
 
-            # Encode input sequences into context vectors:
-            # encoder_outputs: [batch_size, max_time_step, cell_output_size]
-            # encoder_state: [batch_size, cell_output_size]
-            self.tgt_outputs, self.tgt_encoder_last_state = tf.nn.dynamic_rnn(
-                cell=self.tgt_cell, inputs=self.tgt_inputs_embedded,
-                sequence_length=self.tgt_inputs_length, dtype=self.dtype,
-                time_major=False)
+            if self.bidirectional:
+                logging.info("building bidirectional encoder..")
+                fw_encoder_cell = self.build_encoder_cell()
+                bw_encoder_cell = self.build_encoder_cell()
+                self.tgt_outputs, self.tgt_last_state = tf.nn.bidirectional_dynamic_rnn(
+                    cell_fw=fw_encoder_cell, cell_bw=bw_encoder_cell,
+                    inputs=tgt_inputs_embedded,
+                    sequence_length=self.tgt_inputs_length,
+                    time_major=False,
+                    dtype=self.dtype,
+                    parallel_iterations=16,
+                    scope=scope)
 
-            self.tgt_last_output = self._last_output(self.tgt_outputs, self.tgt_cell.output_size, self.tgt_partitions)
+                fw_state, bw_state = self.tgt_last_state
+                self.tgt_last_state = []
+                for f, b in zip(fw_state, bw_state):
+                    if isinstance(f, LSTMStateTuple):
+                        self.tgt_last_state.append(LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
+                    else:
+                        self.tgt_last_state.append(tf.concat([f, b], 1))
+                self.tgt_outputs = tf.concat([self.tgt_outputs[0], self.tgt_outputs[1]], axis=2)
+                output_size = fw_encoder_cell.output_size + bw_encoder_cell.output_size
+
+            else:
+                logging.info("building encoder..")
+                # Building encoder_cell
+                tgt_cell = self.build_encoder_cell()
+                # Encode input sequences into context vectors:
+                # encoder_outputs: [batch_size, max_time_step, cell_output_size]
+                # encoder_state: [batch_size, cell_output_size]
+                self.tgt_outputs, self.tgt_encoder_last_state = tf.nn.dynamic_rnn(
+                    cell=tgt_cell, inputs=tgt_inputs_embedded,
+                    sequence_length=self.tgt_inputs_length, dtype=self.dtype,
+                    time_major=False)
+                output_size = tgt_cell.output_size
+
+            self.tgt_last_output = self._last_output(self.tgt_outputs, output_size, self.tgt_partitions)
 
     @staticmethod
     def _last_output(output, output_size, partitions):
@@ -295,30 +347,25 @@ class Q2VModel(object):
             self.opt = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
 
         # Compute gradients of loss w.r.t. all trainable variables
-        gradients = tf.gradients(self.loss, trainable_params)
 
-        # Clip gradients by a given maximum_gradient_norm
-        clip_gradients, _ = tf.clip_by_global_norm(gradients, self.max_gradient_norm)
-
-        # Update the model
-        self.updates = self.opt.apply_gradients(
-            zip(gradients, trainable_params), global_step=self.global_step)
-
-        grads_and_vars = self.opt.compute_gradients(self.loss)
-        if self.is_sync and self.worker_hosts:
-            rep_op = tf.train.SyncReplicasOptimizer(self.opt,
-                                                    replicas_to_aggregate=len(
-                                                        self.worker_hosts),
-                                                    total_num_replicas=len(
-                                                        self.worker_hosts),
-                                                    use_locking=True)
-            self.updates = rep_op.apply_gradients(grads_and_vars,
-                                                global_step=self.global_step)
-            self.init_token_op = rep_op.get_init_tokens_op()
-            self.chief_queue_runner = rep_op.get_chief_queue_runner()
+        if self.job_name == "worker" and self.is_sync:
+            self.opt = tf.train.SyncReplicasOptimizer(self.opt,
+                                                    replicas_to_aggregate=self.worker_hosts_size,
+                                                    total_num_replicas=self.worker_hosts_size,
+                                                    use_locking=True
+                                                    )
+            grads_and_vars = self.opt.compute_gradients(loss=self.loss)
+            gradients, variables = zip(*grads_and_vars)
         else:
-            self.updates = self.opt.apply_gradients(grads_and_vars,
-                                                   global_step=self.global_step)
+            gradients = tf.gradients(self.loss, tf.trainable_variables(), aggregation_method=2)
+            variables = tf.trainable_variables()
+
+        clipped_gradients, _ = tf.clip_by_global_norm(gradients, self.max_gradient_norm)
+        self.updates = self.opt.apply_gradients(zip(clipped_gradients, variables), self.global_step)
+
+        if self.job_name == "worker":
+            self.init_token_op = self.opt.get_init_tokens_op()
+            self.chief_queue_runner = self.opt.get_chief_queue_runner()
 
         self._add_post_train_ops()
 
@@ -333,7 +380,6 @@ class Q2VModel(object):
         """
         with tf.control_dependencies([self.updates]):
             self.updates = tf.group(self.updates, *self._post_train_ops)
-
 
     @staticmethod
     def _generate_partition(seqlen, max_seq_length):

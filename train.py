@@ -23,8 +23,6 @@ import time
 import logbook as logging
 import tensorflow as tf
 import os
-# https://github.com/tensorflow/tensorflow/commit/ec1403e7dc2b919531e527d36d28659f60621c9e
-# os.environ['TF_CPP_MIN_VLOG_LEVEL']='3'
 import numpy as np
 import math
 from collections import defaultdict
@@ -42,8 +40,8 @@ class Trainer(object):
                  display_freq, model_name='q2v',
                  source_maxlen=None, target_maxlen=None, top_words=None, vocabulary_data_dir=None, port=None):
         self.job_name = job_name
-        self.ps_hosts = ps_hosts.split(",")
-        self.worker_hosts = worker_hosts.split(",")
+        self.ps_hosts = ps_hosts.split(",") if ps_hosts else list()
+        self.worker_hosts = worker_hosts.split(",") if worker_hosts else list()
         self.task_index = task_index
         self.gpu = gpu
         self.model_dir = os.path.join(model_dir, model_name)
@@ -75,6 +73,10 @@ class Trainer(object):
     @property
     @memoized
     def cluster(self):
+        """represents the set of processes that participate in a distributed TensorFlow computation"""
+        assert self.job_name != 'single', "Not support cluster for single machine training"
+        assert len(self.ps_hosts) > 0, "No parameter server are found"
+        assert len(self.worker_hosts) > 0, "No worker_hosts are found"
         cluster = tf.train.ClusterSpec({"ps": self.ps_hosts, "worker": self.worker_hosts})
         return cluster
 
@@ -88,7 +90,13 @@ class Trainer(object):
     @memoized
     def device(self):
         if self.job_name == "worker":
+            # TODO What may happen sometimes is that a single variable is huge,
+            # in which case you would need to break variable into smaller pieces first manually
+            # or using PartitionedVariable
+            ps_strategy = tf.contrib.training.GreedyLoadBalancingStrategy(
+                len(self.ps_hosts), tf.contrib.training.byte_size_load_fn)
             device = tf.train.replica_device_setter(cluster=self.cluster,
+                                                    ps_strategy=ps_strategy,
                                                     worker_device='job:worker/task:%d/%s' % (
                                                         self.task_index, self.core_str),
                                                     ps_device='job:ps/task:%d/%s' % (self.task_index, self.core_str))
@@ -147,16 +155,14 @@ class Trainer(object):
                                      saver=model.saver,
                                      global_step=model.global_step,
                                      save_model_secs=60)
-            gpu_options = tf.GPUOptions(allow_growth=True)
+            gpu_options = tf.GPUOptions(allow_growth=True, allocator_type="BFC")
             session_config = tf.ConfigProto(allow_soft_placement=True,
                                             log_device_placement=False,
                                             gpu_options=gpu_options,
                                             intra_op_parallelism_threads=16)
             with sv.prepare_or_wait_for_session(master=self.master, config=session_config) as sess:
-                # setup tensorboard logging
-                # sw = tf.summary.FileWriter(FLAGS.model_dir, sess.graph, flush_secs=120)
 
-                if self.task_index == 0 and self.is_sync:
+                if self.task_index == 0 and self.is_sync and self.job_name == "worker":
                     sv.start_queue_runners(sess, [model.chief_queue_runner])
                     sess.run(model.init_token_op)
 
@@ -165,10 +171,10 @@ class Trainer(object):
                 data_stream = self.data_stream
                 for _, source_tokens, _, target_tokens, labels in data_stream:
                     start_time = time.time()
-                    source_tokens, source_lens, target_tokens, target_lens, labels = prepare_train_pair_batch(source_tokens, target_tokens, labels, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
+                    source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                     # Get a batch from training parallel data
                     if len(source_tokens) == 0 or len(target_tokens) == 0:
-                        logging.warn('No samples under max_seq_length {}', FLAGS.max_seq_length)
+                        logging.warn('No samples under source_max_seq_length {} or target_max_seq_length {}', self.source_maxlen, self.target_maxlen)
                         continue
 
                     # Execute a single training step
@@ -188,7 +194,7 @@ class Trainer(object):
                         sents_per_sec = sents_done / time_elapsed
                         logging.info(
                             "global step %d, learning rate %.4f, step-time:%.2f, step-loss:%.4f, loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
-                            (model.global_step.eval(), model.learning_rate, step_time, step_loss, loss, avg_perplexity,
+                            (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, loss, avg_perplexity,
                              sents_per_sec, words_per_sec))
                         # set zero timer and loss.
                         words_done, sents_done, loss = 0.0, 0.0, 0.0
@@ -198,6 +204,11 @@ class Trainer(object):
 
 def main(_):
     setup_logger(FLAGS.log_file_name)
+    if FLAGS.debug:
+        # https://github.com/tensorflow/tensorflow/commit/ec1403e7dc2b919531e527d36d28659f60621c9e
+        os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
     trainer = Trainer(raw_data_path=FLAGS.raw_data_path,
                       vocabulary_data_dir=FLAGS.vocabulary_data_dir,
                       port=FLAGS.data_stream_port, top_words=FLAGS.max_vocabulary_size, source_maxlen=FLAGS.source_maxlen, target_maxlen=FLAGS.target_maxlen,

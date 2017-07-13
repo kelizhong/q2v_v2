@@ -288,8 +288,8 @@ def trigram_encoding(data, trigram_dict, return_data=True):
         data_triagrams_index = list()
         data = None
     else:
-        data = re.sub('[^a-z0-9.&\\ ]+', '', data.strip().lower())
-        data_seq = data.split()
+        refined_data = re.sub('[^a-z0-9.&\\ ]+', '', data.strip().lower())
+        data_seq = refined_data.split()
         data_triagrams = list(chain(*[find_ngrams("#" + qw + "#", 3) for qw in data_seq]))
         data_triagrams_index = [trigram_dict[d] if d in trigram_dict else len(trigram_dict) + 1 for d in data_triagrams]
     result = data_triagrams_index, data if return_data else data_triagrams_index
@@ -297,28 +297,12 @@ def trigram_encoding(data, trigram_dict, return_data=True):
 
 
 # batch preparation of a given sequence pair for training
-def prepare_train_pair_batch(seqs_x, seqs_y, labels, source_maxlen=sys.maxsize, target_maxlen=sys.maxsize, dtype='int32'):
+def prepare_train_pair_batch(seqs_x, seqs_y, source_maxlen=sys.maxsize, target_maxlen=sys.maxsize, dtype='int32'):
     # seqs_x, seqs_y: a list of sentences
+    seqs_x = list(map(lambda x: x[:source_maxlen], seqs_x))
+    seqs_y = list(map(lambda x: x[:target_maxlen], seqs_y))
     lengths_x = [len(s) for s in seqs_x]
     lengths_y = [len(s) for s in seqs_y]
-
-    new_seqs_x = []
-    new_seqs_y = []
-    new_lengths_x = []
-    new_lengths_y = []
-    new_labels = []
-    for l_x, s_x, l_y, s_y, label in zip(lengths_x, seqs_x, lengths_y, seqs_y, labels):
-        if l_x <= source_maxlen and l_y <= target_maxlen:
-            new_seqs_x.append(s_x)
-            new_lengths_x.append(l_x)
-            new_seqs_y.append(s_y)
-            new_lengths_y.append(l_y)
-            new_labels.append(label)
-    lengths_x = new_lengths_x
-    seqs_x = new_seqs_x
-    lengths_y = new_lengths_y
-    seqs_y = new_seqs_y
-    labels = new_labels
 
     if len(lengths_x) < 1 or len(lengths_y) < 1:
         return None, None, None, None
@@ -337,26 +321,17 @@ def prepare_train_pair_batch(seqs_x, seqs_y, labels, source_maxlen=sys.maxsize, 
     for idx, [s_x, s_y] in enumerate(zip(seqs_x, seqs_y)):
         x[idx, :lengths_x[idx]] = s_x
         y[idx, :lengths_y[idx]] = s_y
-    return x, x_lengths, y, y_lengths, labels
+    return x, x_lengths, y, y_lengths
 
 
 # batch preparation of a given sequence for embedding or decoder
 def prepare_train_batch(seqs, maxlen=None, dtype='int32'):
     # seqs_x, seqs_y: a list of sentences
+    seqs = list(map(lambda x: x[:maxlen], seqs))
     lengths = [len(s) for s in seqs]
 
-    if maxlen is not None:
-        new_seqs = []
-        new_lengths = []
-        for l, s in zip(lengths, seqs):
-            if l <= maxlen:
-                new_seqs.append(s)
-                new_lengths.append(l)
-        lengths = new_lengths
-        seqs = new_seqs
-
-        if len(lengths) < 1:
-            return None, None
+    if len(lengths) < 1:
+        return None, None
 
     batch_size = len(seqs)
 
@@ -366,6 +341,6 @@ def prepare_train_batch(seqs, maxlen=None, dtype='int32'):
 
     x = np.ones((batch_size, maxlen)).astype(dtype) * end_token
 
-    for idx, seq in enumerate(seqs):
-        x[idx, :lengths[idx]] = seq
+    for idx, s_x in enumerate(seqs):
+        x[idx, :lengths[idx]] = s_x
     return x, lengths

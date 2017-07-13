@@ -12,10 +12,6 @@ class BatchDataHandler(object):
             vocabulary from AKSIS corpus data or custom string
         batch_size: int
             Batch size for each data batch
-        source_maxlen: int
-            max number of words in each source sequence.
-        target_maxlen: int
-            max number of words in each target sequence.
     """
 
     def __init__(self, vocabulary, batch_size):
@@ -63,18 +59,21 @@ class BatchDataTrigramHandler(BatchDataHandler):
             vocabulary from AKSIS corpus data or custom string
         batch_size: int
             Batch size for each data batch
-        source_maxlen: int
-            max number of words in each source sequence.
-        target_maxlen: int
-            max number of words in each target sequence.
+        min_words: int
+            ignore the source wit length less than `min_words`
     """
 
-    def __init__(self, vocabulary, batch_size):
+    def __init__(self, vocabulary, batch_size, min_words=2):
         super().__init__(vocabulary, batch_size)
+        self.min_words = min_words
 
     def parse_and_insert_data_object(self, source, target, label=1):
         """parse data using trigram parser, insert it to data_object to generate batch data"""
-        source_tokens, source = trigram_encoding(source, self.vocabulary)
-        target_tokens, target = trigram_encoding(target, self.vocabulary)
-        data_object = self.insert_data_object(source, source_tokens, target, target_tokens, label)
+        if source and len(source.split()) > self.min_words:
+            # discard source with length less than `min_words`
+            source_tokens, source = trigram_encoding(source, self.vocabulary)
+            target_tokens, target = trigram_encoding(target, self.vocabulary)
+            data_object = self.insert_data_object(source, source_tokens, target, target_tokens, label)
+        else:
+            data_object = self.data_object
         return data_object

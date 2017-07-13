@@ -64,11 +64,14 @@ class AksisDataCollector(Process):
             # accept the msg and add to the bucket queue and send the batch data to trainer
             # encoder_sentence_id for query in aksis data
             # decoder_sentence_id for title in aksis data
-            source_tokens, source_lens, target_tokens, target_lens, label_id = pickle.loads(msg[0])
-            # add the data from parser worker, and get data from the batch queue
-            if len(source_tokens) == self.batch_size:
-                sender.send_pyobj((source_tokens, source_lens, target_tokens, target_lens, label_id))
-                metric.notify(self.batch_size)
+            try:
+                source_tokens, source_lens, target_tokens, target_lens, label_id = pickle.loads(msg[0])
+                # add the data from parser worker, and get data from the batch queue
+                if len(source_tokens) == self.batch_size:
+                    sender.send_pyobj((source_tokens, source_lens, target_tokens, target_lens, label_id))
+                    metric.notify(self.batch_size)
+            except Exception as e:
+                logging.info("{} failed to load msg. Error: {}", self.name, e)
 
         pull_stream.on_recv(_on_recv)
 

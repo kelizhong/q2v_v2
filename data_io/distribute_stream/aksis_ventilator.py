@@ -35,7 +35,7 @@ class AksisDataVentilatorProcess(Process):
 
     def __init__(self, file_pattern, data_dir,
                  num_epoch=65535, dropout=-1, ip='127.0.0.1', port='5555',
-                 metric_interval=30, neg_number=5, name='VentilatorProcess'):
+                 metric_interval=30, neg_number=4, name='VentilatorProcess'):
         Process.__init__(self)
         self.file_pattern = file_pattern
         self.data_dir = data_dir
