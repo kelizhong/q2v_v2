@@ -38,7 +38,7 @@ tf.app.flags.DEFINE_float('dropout_rate', 0.3, 'Dropout probability for input/ou
 tf.app.flags.DEFINE_boolean('use_dropout', True, 'Use dropout in each rnn cell')
 tf.app.flags.DEFINE_boolean('use_residual', True, 'Use residual connection between layers')
 tf.app.flags.DEFINE_integer('max_vocabulary_size', 64005, 'Source vocabulary size')
-tf.app.flags.DEFINE_string('optimizer', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop, cocob)')
+tf.app.flags.DEFINE_string('optimizer', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)')
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("source_maxlen", 60, "max number of words in each source sequence.")
 tf.app.flags.DEFINE_integer("target_maxlen", 60, "max number of words in each target sequence.")

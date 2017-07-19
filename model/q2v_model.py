@@ -356,6 +356,8 @@ class Q2VModel(object):
             self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
         elif self.optimizer.lower() == 'rmsprop':
             self.opt = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
+        elif self.optimizer.lower == 'adagrad':
+            self.opt = tf.train.AdagradOptimizer(learning_rate=self.learning_rate)
         elif self.optimizer.lower() == 'cocob':
             self.opt = COCOB()
         else:
