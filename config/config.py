@@ -29,9 +29,9 @@ tf.app.flags.DEFINE_boolean('debug', False, 'Enable debug')
 
 # Network parameters
 tf.app.flags.DEFINE_integer("num_layers", 3, "Number of layers in the model.")
-tf.app.flags.DEFINE_integer("embedding_size", 128, "Size of word embedding vector.")
+tf.app.flags.DEFINE_integer("embedding_size", 64, "Size of word embedding vector.")
 tf.app.flags.DEFINE_boolean('bidirectional', True, 'Enable bidirectional encoder')
-tf.app.flags.DEFINE_integer('hidden_units', 256, 'Number of hidden units in each layer')
+tf.app.flags.DEFINE_integer('hidden_units', 128, 'Number of hidden units in each layer')
 tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 instead of float32 as dtype')
 tf.app.flags.DEFINE_string('cell_type', 'lstm', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_float('dropout_rate', 0.3, 'Dropout probability for input/output/state units (0.0: no dropout)')
@@ -41,7 +41,7 @@ tf.app.flags.DEFINE_integer('max_vocabulary_size', 64005, 'Source vocabulary siz
 tf.app.flags.DEFINE_string('optimizer', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop, cocob)')
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("source_maxlen", 60, "max number of words in each source sequence.")
-tf.app.flags.DEFINE_integer("target_maxlen", 180, "max number of words in each target sequence.")
+tf.app.flags.DEFINE_integer("target_maxlen", 60, "max number of words in each target sequence.")
 
 # For distributed
 # cluster specification

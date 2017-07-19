@@ -2,7 +2,7 @@ import random
 
 
 class RandomSet(object):
-    def __init__(self, capacity=1024):
+    def __init__(self, capacity=65536):
         self.capacity = capacity
         self.set = set()
 
@@ -10,9 +10,13 @@ class RandomSet(object):
         return len(self.set)
 
     def add(self, item):
+        self.set.add(item)
         if self.__len__() > self.capacity:
             self.pop()
-        self.set.add(item)
+
+    def update(self, second_set):
+        for ele in second_set:
+            self.add(ele)
 
     def get_n_items(self, n):
         return random.sample(self.set, n if self.__len__() > n else self.__len__())
