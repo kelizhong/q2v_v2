@@ -1,6 +1,9 @@
 import os
-import tensorflow as tf
 import sys
+import tensorflow as tf
+import numpy as np
+from tensorflow.contrib.tensorboard.plugins import projector
+from tqdm import tqdm
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
@@ -8,9 +11,6 @@ from vocabulary.vocab import VocabularyFromCustomStringTrigram
 from config.config import FLAGS
 from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
-import numpy as np
-from tensorflow.contrib.tensorboard.plugins import projector
-from tqdm import tqdm
 
 
 class Inference(object):

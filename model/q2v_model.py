@@ -49,7 +49,8 @@ class Q2VModel(object):
 
         self.learning_rate = tf.maximum(
             config['min_learning_rate'],  # min_lr_rate.
-            tf.train.exponential_decay(config['learning_rate'], self.global_step, config['decay_steps'], config['lr_decay_factor']))
+            tf.train.exponential_decay(config['learning_rate'], self.global_step, config['decay_steps'],
+                                       config['lr_decay_factor']))
 
         # List of operations to be called after each training step, see
         # _add_post_train_ops
@@ -74,7 +75,7 @@ class Q2VModel(object):
         # TODO use MutableHashTable to store word->id mapping in checkpoint
         # source_inputs: [batch_size, max_time_steps]
         self.src_inputs = tf.placeholder(dtype=tf.int32,
-                                             shape=(None, None), name='source_inputs')
+                                         shape=(None, None), name='source_inputs')
 
         # source_inputs_length: [batch_size]
         self.src_inputs_length = tf.placeholder(
@@ -95,7 +96,7 @@ class Q2VModel(object):
 
             self.tgt_partitions = tf.placeholder(tf.int32, [None], name='target_partitions')
 
-            self.labels = tf.placeholder(self.dtype, [None], name='labels')
+            self.labels = tf.placeholder(tf.int32, [None], name='labels')
 
     def build_single_cell(self):
         cell_type = LSTMCell
@@ -121,8 +122,8 @@ class Q2VModel(object):
         with tf.variable_scope('shared_encoder', dtype=self.dtype) as scope:
 
             self.src_embeddings = tf.get_variable(name='embedding',
-                                                      shape=[self.max_vocabulary_size, self.embedding_size],
-                                                      initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
+                                                  shape=[self.max_vocabulary_size, self.embedding_size],
+                                                  initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
             src_inputs_embedded = tf.nn.embedding_lookup(
@@ -152,7 +153,8 @@ class Q2VModel(object):
                 self.src_last_state = []
                 for f, b in zip(fw_state, bw_state):
                     if isinstance(f, LSTMStateTuple):
-                        self.src_last_state.append(LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
+                        self.src_last_state.append(
+                            LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
                     else:
                         self.src_last_state.append(tf.concat([f, b], 1))
                 self.src_outputs = tf.concat([self.src_outputs[0], self.src_outputs[1]], axis=2)
@@ -178,8 +180,8 @@ class Q2VModel(object):
         with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
 
             self.tgt_embeddings = tf.get_variable(name='embedding',
-                                                      shape=[self.max_vocabulary_size, self.embedding_size],
-                                                      initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
+                                                  shape=[self.max_vocabulary_size, self.embedding_size],
+                                                  initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
             tgt_inputs_embedded = tf.nn.embedding_lookup(
@@ -209,7 +211,8 @@ class Q2VModel(object):
                 self.tgt_last_state = []
                 for f, b in zip(fw_state, bw_state):
                     if isinstance(f, LSTMStateTuple):
-                        self.tgt_last_state.append(LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
+                        self.tgt_last_state.append(
+                            LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
                     else:
                         self.tgt_last_state.append(tf.concat([f, b], 1))
                 self.tgt_outputs = tf.concat([self.tgt_outputs[0], self.tgt_outputs[1]], axis=2)
@@ -240,29 +243,41 @@ class Q2VModel(object):
 
         return res_out[1]
 
-    @staticmethod
-    def contrastive_loss(y, d, batch_size):
+    def contrastive_loss(self):
+
+        labels = tf.cast(self.labels, self.dtype)
+        distance = tf.sqrt(
+            tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
+
+        distance = tf.div(distance,
+                          tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
+                                 tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
+
+        distance = tf.reshape(distance, [-1], name="distance")
+
         # tmp = y * tf.square(d)
-        tmp = tf.multiply(y, tf.square(d))
-        tmp2 = (1 - y) * tf.square(tf.maximum((1 - d), 0))
-        return tf.reduce_sum(tmp + tmp2) / batch_size / 2
+        tmp = tf.multiply(labels, tf.square(distance))
+        tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
+        return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+
+    def similarity_loss(self):
+        # compute src / tgt similarity
+        with tf.variable_scope('similarity'):
+            similarity = tf.matmul(self.src_last_output, self.tgt_last_output, transpose_b=True)
+
+        with tf.variable_scope('training_loss'):
+            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=similarity, labels=self.labels))
+
+        return loss
 
     def init_loss(self):
 
-        self.distance = tf.sqrt(
-            tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
-
-        self.distance = tf.div(self.distance,
-                               tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
-                                      tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
-
-        self.distance = tf.reshape(self.distance, [-1], name="distance")
-
         with tf.name_scope("loss"):
-            self.loss = self.contrastive_loss(self.labels, self.distance, self.batch_size)
-            # compute src / tgt similarity
+            self.loss = self.contrastive_loss()
+            # self.loss = self.similarity_loss()
 
-    def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions, labels):
+    def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
+                    labels):
         """
         Args:
           src_inputs: a numpy int matrix of [batch_size, max_source_time_steps]
@@ -298,7 +313,6 @@ class Q2VModel(object):
         input_feed[self.src_partitions.name] = src_partitions
 
         if self.mode == 'train':
-
             input_feed[self.tgt_inputs.name] = tgt_inputs
             input_feed[self.tgt_inputs_length.name] = tgt_inputs_length
             input_feed[self.labels.name] = labels
@@ -317,7 +331,8 @@ class Q2VModel(object):
         tgt_inputs_max_seq_length = tgt_inputs.shape[1]
         tgt_partitions = self._generate_partition(tgt_inputs_length, tgt_inputs_max_seq_length)
 
-        input_feed = self.check_feeds(src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions, labels)
+        input_feed = self.check_feeds(src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length,
+                                      tgt_partitions, labels)
 
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = self.keep_prob
@@ -350,10 +365,10 @@ class Q2VModel(object):
 
         if self.job_name == "worker" and self.is_sync:
             self.opt = tf.train.SyncReplicasOptimizer(self.opt,
-                                                    replicas_to_aggregate=self.worker_hosts_size,
-                                                    total_num_replicas=self.worker_hosts_size,
-                                                    use_locking=True
-                                                    )
+                                                      replicas_to_aggregate=self.worker_hosts_size,
+                                                      total_num_replicas=self.worker_hosts_size,
+                                                      use_locking=True
+                                                      )
             grads_and_vars = self.opt.compute_gradients(loss=self.loss)
             gradients, variables = zip(*grads_and_vars)
         else:
@@ -398,7 +413,7 @@ class Q2VModel(object):
         max_seq_length = src_inputs.shape[1]
         src_partitions = self._generate_partition(src_inputs_length, max_seq_length)
         input_feed = self.check_feeds(src_inputs, src_inputs_length, src_partitions,
-                                      tgt_inputs=None, tgt_inputs_length=None, tgt_partitions= None, labels=None)
+                                      tgt_inputs=None, tgt_inputs_length=None, tgt_partitions=None, labels=None)
 
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = 1.0
@@ -407,5 +422,4 @@ class Q2VModel(object):
         output_feed = [self.src_last_output]
         outputs = sess.run(output_feed, input_feed)
 
-        return outputs[0] # encode: [batch_size, cell.output_size]
-
+        return outputs[0]  # encode: [batch_size, cell.output_size]
