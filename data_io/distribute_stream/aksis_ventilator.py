@@ -7,8 +7,9 @@ import fnmatch
 import logbook as logging
 import zmq
 from zmq.decorators import socket
+import glob
 from utils.appmetric_util import AppMetric
-from utils.data_util import negative_sampling_train_data_generator
+from utils.data_util import negative_sampling_train_data_generator, negative_sampling_query_pair_data_generator
 
 
 class AksisDataVentilatorProcess(Process):
@@ -68,12 +69,12 @@ class AksisDataVentilatorProcess(Process):
 
     def get_data_stream(self):
         """data stream generate the query, title data"""
-        data_files = fnmatch.filter(os.listdir(self.data_dir), self.file_pattern)
+        data_files = glob.glob(self.file_pattern)
 
         if len(data_files) <= 0:
             raise FileNotFoundError("no files are found for file pattern {} in {}".format(self.file_pattern,
                                                                                                   self.data_dir))
-        action_files = [os.path.join(self.data_dir, filename) for filename in data_files]
+        # action_files = [os.path.join(self.data_dir, filename) for filename in data_files]
 
-        for source, target, label in negative_sampling_train_data_generator(action_files, self.neg_number, self.dropout):
+        for source, target, label in negative_sampling_query_pair_data_generator(data_files, self.neg_number, self.dropout):
             yield source, target, label

@@ -69,7 +69,7 @@ class BatchDataTrigramHandler(BatchDataHandler):
 
     def parse_and_insert_data_object(self, source, target, label=1):
         """parse data using trigram parser, insert it to data_object to generate batch data"""
-        if source and len(source.split()) > self.min_words:
+        if source and len(source.split()) >= self.min_words and len(target.split()) >= self.min_words:
             # discard source with length less than `min_words`
             source_tokens, source = trigram_encoding(source, self.vocabulary)
             target_tokens, target = trigram_encoding(target, self.vocabulary)

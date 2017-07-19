@@ -15,6 +15,7 @@ from collections import Counter
 import numpy as np
 from itertools import chain
 from config.config import end_token
+from itertools import combinations
 
 wn_lemmatizer = WordNetLemmatizer()
 
@@ -116,6 +117,31 @@ def query_title_score_generator_from_aksis_data(files, dropout=-1):
             if not is_hit(score, dropout):
                 continue
             yield query, title
+
+
+def query_pair_generator_from_aksis_data(files, nouse=-1):
+    for sentence in sentence_gen(files):
+        sentence = sentence.strip().lower()
+        sentence = re.sub(r'(?:^\(|\)$)', '', sentence)
+        items = re.split(r'\t+', sentence)
+        if len(items) > 2:
+            items = items[1:]
+        yield items
+
+
+def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
+    rs = RandomSet()
+    for items in query_pair_generator_from_aksis_data(files, dropout):
+        current_query_pair_set = set()
+        for item in combinations(items, 2):
+            current_query_pair_set.add(item[0])
+            current_query_pair_set.add(item[1])
+            yield item[0], item[1], aksis_data_label.positive_label.value
+            for neg_query in rs.get_n_items(neg_number):
+                query = random.choice(item)
+                if query != neg_query:
+                    yield random.choice(item), neg_query, aksis_data_label.negative_label.value
+            rs.update(current_query_pair_set)
 
 
 def negative_sampling_train_data_generator(files, neg_number, dropout=-1):
