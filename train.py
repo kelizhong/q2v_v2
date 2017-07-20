@@ -154,7 +154,7 @@ class Trainer(object):
                                      summary_op=summary_op,
                                      saver=model.saver,
                                      global_step=model.global_step,
-                                     save_model_secs=60)
+                                     save_model_secs=180)
             gpu_options = tf.GPUOptions(allow_growth=True, allocator_type="BFC")
             session_config = tf.ConfigProto(allow_soft_placement=True,
                                             log_device_placement=False,
@@ -171,11 +171,14 @@ class Trainer(object):
                 data_stream = self.data_stream
                 for _, source_tokens, _, target_tokens, labels in data_stream:
                     start_time = time.time()
+                    logging.info("source_batch_zie:{}, target_batch_zie:{}", len(source_tokens), len(target_tokens))
                     source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                     # Get a batch from training parallel data
-                    if len(source_tokens) == 0 or len(target_tokens) == 0:
+                    if source_tokens is None or target_tokens is None or len(source_tokens) == 0 or len(target_tokens) == 0:
                         logging.warn('No samples under source_max_seq_length {} or target_max_seq_length {}', self.source_maxlen, self.target_maxlen)
                         continue
+
+                    logging.info("source_batch_zie_1:{}, target_batch_zie_1:{}", len(source_tokens), len(target_tokens))
 
                     # Execute a single training step
                     step_loss = model.train(sess, src_inputs=source_tokens, src_inputs_length=source_lens,

@@ -32,7 +32,7 @@ class AksisDataReceiver(object):
     def __iter__(self):
         return self
 
-    @with_meter('aksis_data_receiver', interval=60)
+    @with_meter('aksis_data_receiver', interval=600)
     def __next__(self):
         """return the data from collector"""
         if 0 < self.stop_freq < self.num:

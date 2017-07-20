@@ -18,7 +18,7 @@ special_words = {_GO: start_token, EOS: end_token}
 tf.app.flags.DEFINE_integer("batch_size", 128,
                             "Batch size to use during training(positive pair count based).")
 tf.app.flags.DEFINE_string("model_dir", os.path.join(project_dir, 'data/models'), "Trained model directory.")
-tf.app.flags.DEFINE_integer("display_freq", 1,
+tf.app.flags.DEFINE_integer("display_freq", 10,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_string("gpu", None, "specify the gpu to use")
 tf.app.flags.DEFINE_string("log_file_name", os.path.join(project_dir, 'data/logs', 'q2v.log'), "Log data file name")
@@ -29,7 +29,7 @@ tf.app.flags.DEFINE_boolean('debug', False, 'Enable debug')
 
 # Network parameters
 tf.app.flags.DEFINE_integer("num_layers", 3, "Number of layers in the model.")
-tf.app.flags.DEFINE_integer("embedding_size", 64, "Size of word embedding vector.")
+tf.app.flags.DEFINE_integer("embedding_size", 256, "Size of word embedding vector.")
 tf.app.flags.DEFINE_boolean('bidirectional', True, 'Enable bidirectional encoder')
 tf.app.flags.DEFINE_integer('hidden_units', 128, 'Number of hidden units in each layer')
 tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 instead of float32 as dtype')
@@ -54,7 +54,7 @@ tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
 tf.app.flags.DEFINE_boolean("is_sync", True, "whether to synchronize, aggregate gradients")
 
 # Training parameters
-tf.app.flags.DEFINE_float('learning_rate', 0.1, 'Learning rate')
+tf.app.flags.DEFINE_float('learning_rate', 0.002, 'Learning rate')
 tf.app.flags.DEFINE_float('min_learning_rate', 0.0002, 'minimum Learning rate')
 tf.app.flags.DEFINE_integer('decay_steps', 10000, 'how many steps to update the learning rate.')
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.9, "Learning rate decays by this much.")

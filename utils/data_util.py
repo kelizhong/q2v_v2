@@ -139,8 +139,8 @@ def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
                 continue
             current_query_pair_set.add(item[0])
             current_query_pair_set.add(item[1])
-            yield item[0], item[1], aksis_data_label.positive_label.value
             if len(rs) > capacity - 100:
+                yield item[0], item[1], aksis_data_label.positive_label.value
                 for neg_query in rs.get_n_items(neg_number):
                     query = random.choice(item)
                     if query != neg_query:

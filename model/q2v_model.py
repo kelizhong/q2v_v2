@@ -7,7 +7,6 @@ from tensorflow.python.ops.rnn_cell import GRUCell
 from tensorflow.python.ops.rnn_cell import LSTMCell, LSTMStateTuple
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
-from tensorflow.contrib.opt.python.training import nadam_optimizer
 
 import logbook as logging
 from external.cocob_optimizer import COCOB
@@ -63,6 +62,7 @@ class Q2VModel(object):
     def build_model(self):
         logging.info("building model..")
         self.init_placeholders()
+        self._init_embedding_layer()
         self.build_source_encoder()
         if self.mode == 'train':
             self.build_target_encoder()
@@ -118,31 +118,33 @@ class Q2VModel(object):
 
         return MultiRNNCell([self.build_single_cell() for _ in range(self.num_layers)])
 
+    def _init_embedding_layer(self):
+        self.encoder_embeddings = tf.get_variable(name='embedding',
+                                              shape=[self.max_vocabulary_size, self.embedding_size],
+                                              initializer=tf.random_uniform_initializer(-0.25, 0.25), dtype=self.dtype)
+
     def build_source_encoder(self):
         logging.info("building source encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype) as scope:
 
-            self.src_embeddings = tf.get_variable(name='embedding',
-                                                  shape=[self.max_vocabulary_size, self.embedding_size],
-                                                  initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
-
             # Embedded_inputs: [batch_size, time_step, embedding_size]
             src_inputs_embedded = tf.nn.embedding_lookup(
-                params=self.src_embeddings, ids=self.src_inputs)
+                params=self.encoder_embeddings, ids=self.src_inputs)
 
-            # Input projection layer to feed embedded inputs to the cell
-            # ** Essential when use_residual=True to match input/output dims
-            input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
+            if self.use_residual:
+                # Input projection layer to feed embedded inputs to the cell
+                # ** Essential when use_residual=True to match input/output dims
+                input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
 
-            # Embedded inputs having gone through input projection layer
-            src_inputs_embedded = input_layer(src_inputs_embedded)
+                # Embedded inputs having gone through input projection layer
+                src_inputs_embedded = input_layer(src_inputs_embedded)
 
             if self.bidirectional:
                 logging.info("building bidirectional encoder..")
-                fw_encoder_cell = self.build_encoder_cell()
-                bw_encoder_cell = self.build_encoder_cell()
+                self.fw_encoder_cell = self.build_encoder_cell()
+                self.bw_encoder_cell = self.build_encoder_cell()
                 self.src_outputs, self.src_last_state = tf.nn.bidirectional_dynamic_rnn(
-                    cell_fw=fw_encoder_cell, cell_bw=bw_encoder_cell,
+                    cell_fw=self.fw_encoder_cell, cell_bw=self.bw_encoder_cell,
                     inputs=src_inputs_embedded,
                     sequence_length=self.src_inputs_length,
                     time_major=False,
@@ -159,48 +161,43 @@ class Q2VModel(object):
                     else:
                         self.src_last_state.append(tf.concat([f, b], 1))
                 self.src_outputs = tf.concat([self.src_outputs[0], self.src_outputs[1]], axis=2)
-                output_size = fw_encoder_cell.output_size + bw_encoder_cell.output_size
+                output_size = self.fw_encoder_cell.output_size + self.bw_encoder_cell.output_size
 
             else:
                 logging.info("building encoder..")
                 # Building encoder_cell
-                src_cell = self.build_encoder_cell()
+                self.encoder_cell = self.build_encoder_cell()
                 # Encode input sequences into context vectors:
                 # encoder_outputs: [batch_size, max_time_step, cell_output_size]
                 # encoder_state: [batch_size, cell_output_size]
                 self.src_outputs, self.src_encoder_last_state = tf.nn.dynamic_rnn(
-                    cell=src_cell, inputs=src_inputs_embedded,
+                    cell=self.encoder_cell, inputs=src_inputs_embedded,
                     sequence_length=self.src_inputs_length, dtype=self.dtype,
                     time_major=False)
-                output_size = src_cell.output_size
-
+                output_size = self.encoder_cell.output_size
+            # [batch_size, hidden unit]
             self.src_last_output = self._last_output(self.src_outputs, output_size, self.src_partitions)
 
     def build_target_encoder(self):
         logging.info("building target encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
 
-            self.tgt_embeddings = tf.get_variable(name='embedding',
-                                                  shape=[self.max_vocabulary_size, self.embedding_size],
-                                                  initializer=tf.contrib.layers.xavier_initializer(), dtype=self.dtype)
-
             # Embedded_inputs: [batch_size, time_step, embedding_size]
             tgt_inputs_embedded = tf.nn.embedding_lookup(
-                params=self.tgt_embeddings, ids=self.tgt_inputs)
+                params=self.encoder_embeddings, ids=self.tgt_inputs)
 
-            # Input projection layer to feed embedded inputs to the cell
-            # ** Essential when use_residual=True to match input/output dims
-            input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
+            if self.use_residual:
+                # Input projection layer to feed embedded inputs to the cell
+                # ** Essential when use_residual=True to match input/output dims
+                input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
 
-            # Embedded inputs having gone through input projection layer
-            tgt_inputs_embedded = input_layer(tgt_inputs_embedded)
+                # Embedded inputs having gone through input projection layer
+                tgt_inputs_embedded = input_layer(tgt_inputs_embedded)
 
             if self.bidirectional:
                 logging.info("building bidirectional encoder..")
-                fw_encoder_cell = self.build_encoder_cell()
-                bw_encoder_cell = self.build_encoder_cell()
                 self.tgt_outputs, self.tgt_last_state = tf.nn.bidirectional_dynamic_rnn(
-                    cell_fw=fw_encoder_cell, cell_bw=bw_encoder_cell,
+                    cell_fw=self.fw_encoder_cell, cell_bw=self.bw_encoder_cell,
                     inputs=tgt_inputs_embedded,
                     sequence_length=self.tgt_inputs_length,
                     time_major=False,
@@ -217,20 +214,19 @@ class Q2VModel(object):
                     else:
                         self.tgt_last_state.append(tf.concat([f, b], 1))
                 self.tgt_outputs = tf.concat([self.tgt_outputs[0], self.tgt_outputs[1]], axis=2)
-                output_size = fw_encoder_cell.output_size + bw_encoder_cell.output_size
+                output_size = self.fw_encoder_cell.output_size + self.bw_encoder_cell.output_size
 
             else:
                 logging.info("building encoder..")
                 # Building encoder_cell
-                tgt_cell = self.build_encoder_cell()
                 # Encode input sequences into context vectors:
                 # encoder_outputs: [batch_size, max_time_step, cell_output_size]
                 # encoder_state: [batch_size, cell_output_size]
                 self.tgt_outputs, self.tgt_encoder_last_state = tf.nn.dynamic_rnn(
-                    cell=tgt_cell, inputs=tgt_inputs_embedded,
+                    cell=self.encoder_cell, inputs=tgt_inputs_embedded,
                     sequence_length=self.tgt_inputs_length, dtype=self.dtype,
                     time_major=False)
-                output_size = tgt_cell.output_size
+                output_size = self.encoder_cell.output_size
 
             self.tgt_last_output = self._last_output(self.tgt_outputs, output_size, self.tgt_partitions)
 
@@ -244,20 +240,19 @@ class Q2VModel(object):
 
         return res_out[1]
 
-    def cos_similarity_los(self):
+    def cos_similarity_loss(self):
         labels = tf.cast(self.labels, self.dtype)
-
-        normalize_a = tf.nn.l2_normalize(self.src_last_output, 0)
-        normalize_b = tf.nn.l2_normalize(self.tgt_last_output, 0)
-        distance = tf.reduce_sum(tf.multiply(normalize_a, normalize_b))
-        tmp = tf.multiply(labels, tf.square(distance))
-        tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
-        return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+        src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
+        tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
+        distance = 2 - 2 * tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((1 - distance), 0))))
+        loss_mean = tf.reduce_mean(loss)
+        return loss_mean
 
     def dot_product_loss(self):
         labels = tf.cast(self.labels, self.dtype)
 
-        distance = tf.reduce_sum(tf.multiply(self.src_last_output, self.tgt_last_output))
+        distance = tf.reduce_sum(tf.multiply(self.src_last_output, self.tgt_last_output), axis=1)
         tmp = tf.multiply(labels, tf.square(distance))
         tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
         return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
@@ -265,6 +260,7 @@ class Q2VModel(object):
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
+        # Euclidean distance between x1,x2
         distance = tf.sqrt(
             tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
 
@@ -275,16 +271,45 @@ class Q2VModel(object):
         distance = tf.reshape(distance, [-1], name="distance")
 
         # tmp = y * tf.square(d)
-        tmp = tf.multiply(labels, tf.square(distance))
-        tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
-        return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+        # tmp = tf.multiply(labels, tf.square(distance))
+        # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
+        # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((1 - distance), 0))))
+        loss_mean = tf.reduce_mean(loss)
+        return loss_mean
 
+
+    def contrastive_loss_1(self):
+
+        src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
+        tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
+
+        labels = tf.cast(self.labels, self.dtype)
+        l2_loss_pairs = tf.reduce_sum(tf.square(src_last_output_normalize - tgt_last_output_normalize), 1)
+        positive_loss = l2_loss_pairs
+        margin = tf.constant(10.)
+        negative_loss = tf.nn.relu(margin - l2_loss_pairs)
+        final_loss = tf.multiply(labels, positive_loss) + tf.multiply(1. - labels, negative_loss)
+        loss_mean = tf.reduce_mean(final_loss)
+        return loss_mean
+
+    def contrastive_loss_2(self):
+        # compute src / tgt similarity
+        src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
+        tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
+        concat = tf.concat([src_last_output_normalize, tgt_last_output_normalize], axis=1)
+        input_layer = Dense(2, dtype=self.dtype, name='input_projection_loss')
+
+        # Embedded inputs having gone through input projection layer
+        concat = input_layer(concat)
+        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=concat, labels=self.labels))
+        return loss
 
     def init_loss(self):
 
         with tf.name_scope("loss"):
-            # self.loss = self.contrastive_loss()
-            self.loss = self.cos_similarity_los()
+            self.loss = self.contrastive_loss()
+            # self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
