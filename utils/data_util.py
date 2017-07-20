@@ -143,7 +143,9 @@ def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
                 query = random.choice(item)
                 if query != neg_query:
                     yield query, neg_query, aksis_data_label.negative_label.value
-        rs.update(current_query_pair_set)
+        # rs.update(current_query_pair_set)
+        if len(current_query_pair_set) > 1:
+            rs.add(random.sample(current_query_pair_set, 1))
 
 
 def negative_sampling_train_data_generator(files, neg_number, dropout=-1):
