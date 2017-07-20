@@ -244,6 +244,24 @@ class Q2VModel(object):
 
         return res_out[1]
 
+    def cos_similarity_los(self):
+        labels = tf.cast(self.labels, self.dtype)
+
+        normalize_a = tf.nn.l2_normalize(self.src_last_output, 0)
+        normalize_b = tf.nn.l2_normalize(self.tgt_last_output, 0)
+        distance = tf.reduce_sum(tf.multiply(normalize_a, normalize_b))
+        tmp = tf.multiply(labels, tf.square(distance))
+        tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
+        return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+
+    def dot_product_loss(self):
+        labels = tf.cast(self.labels, self.dtype)
+
+        distance = tf.reduce_sum(tf.multiply(self.src_last_output, self.tgt_last_output))
+        tmp = tf.multiply(labels, tf.square(distance))
+        tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
+        return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
@@ -261,26 +279,13 @@ class Q2VModel(object):
         tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
         return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
 
-    def similarity_loss(self):
-        # compute src / tgt similarity
-        with tf.variable_scope('similarity'):
-            similarity = tf.matmul(self.src_last_output, self.tgt_last_output, transpose_b=True)
-
-        with tf.variable_scope('training_loss'):
-
-            # Ensures that the loss for examples whose ground truth class is `1` is 4x
-            # higher than the loss for all other examples.
-            weight = tf.multiply(3.0, tf.cast(tf.equal(self.labels, 1), tf.float32)) + 1
-            # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=similarity, labels=self.labels))
-            loss = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(logits=similarity, labels=self.labels, weights=weight))
-
-        return loss
 
     def init_loss(self):
 
         with tf.name_scope("loss"):
             # self.loss = self.contrastive_loss()
-            self.loss = self.similarity_loss()
+            self.loss = self.cos_similarity_los()
+            # self.loss = self.dot_product_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
                     labels):
