@@ -267,7 +267,12 @@ class Q2VModel(object):
             similarity = tf.matmul(self.src_last_output, self.tgt_last_output, transpose_b=True)
 
         with tf.variable_scope('training_loss'):
-            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=similarity, labels=self.labels))
+
+            # Ensures that the loss for examples whose ground truth class is `1` is 4x
+            # higher than the loss for all other examples.
+            weight = tf.multiply(3.0, tf.cast(tf.equal(self.labels, 1), tf.float32)) + 1
+            # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=similarity, labels=self.labels))
+            loss = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(logits=similarity, labels=self.labels, weights=weight))
 
         return loss
 
