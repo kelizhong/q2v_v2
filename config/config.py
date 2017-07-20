@@ -36,7 +36,7 @@ tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 inste
 tf.app.flags.DEFINE_string('cell_type', 'lstm', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_float('dropout_rate', 0.3, 'Dropout probability for input/output/state units (0.0: no dropout)')
 tf.app.flags.DEFINE_boolean('use_dropout', True, 'Use dropout in each rnn cell')
-tf.app.flags.DEFINE_boolean('use_residual', True, 'Use residual connection between layers')
+tf.app.flags.DEFINE_boolean('use_residual', False, 'Use residual connection between layers')
 tf.app.flags.DEFINE_integer('max_vocabulary_size', 64005, 'Source vocabulary size')
 tf.app.flags.DEFINE_string('optimizer', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)')
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
@@ -57,7 +57,7 @@ tf.app.flags.DEFINE_boolean("is_sync", True, "whether to synchronize, aggregate 
 tf.app.flags.DEFINE_float('learning_rate', 0.1, 'Learning rate')
 tf.app.flags.DEFINE_float('min_learning_rate', 0.0002, 'minimum Learning rate')
 tf.app.flags.DEFINE_integer('decay_steps', 10000, 'how many steps to update the learning rate.')
-tf.app.flags.DEFINE_float("lr_decay_factor", 0.99, "Learning rate decays by this much.")
+tf.app.flags.DEFINE_float("lr_decay_factor", 0.9, "Learning rate decays by this much.")
 
 FLAGS = tf.app.flags.FLAGS
 ps_hosts = FLAGS.ps_hosts.split(",")

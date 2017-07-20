@@ -274,8 +274,8 @@ class Q2VModel(object):
     def init_loss(self):
 
         with tf.name_scope("loss"):
-            self.loss = self.contrastive_loss()
-            # self.loss = self.similarity_loss()
+            # self.loss = self.contrastive_loss()
+            self.loss = self.similarity_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
                     labels):

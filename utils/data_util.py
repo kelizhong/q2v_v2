@@ -134,7 +134,7 @@ def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
     for items in query_pair_generator_from_aksis_data(files, dropout):
         current_query_pair_set = set()
         for item in combinations(items, 2):
-            if len(item[0]) < 2 or len(item[1]) < 2:
+            if len(item[0].split()) < 2 or len(item[1].split()) < 2:
                 continue
             current_query_pair_set.add(item[0])
             current_query_pair_set.add(item[1])
