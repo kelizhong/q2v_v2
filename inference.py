@@ -26,7 +26,7 @@ class Inference(object):
         """
         self.sess = tf.Session()
         self.model = self._init_model()
-        self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size=sys.maxsize, min_words=min_words)
+        self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size=sys.maxsize, min_words=min_words, enable_target=False)
         self.batch_size = batch_size
         self.source_maxlen = source_maxlen
         self.max_sequences = max_sequences
@@ -41,7 +41,7 @@ class Inference(object):
         source_tokens = []
         self.batch_data.clear_data_object()
         for each in inputs:
-            sources, source_tokens, _, _, _ = self.batch_data.parse_and_insert_data_object(each, None)
+            sources, source_tokens = self.batch_data.parse_and_insert_data_object(each, None)
         source_tokens, source_lens = prepare_train_batch(source_tokens)
         vectors = None
         if source_tokens is not None and len(source_tokens) > 0:

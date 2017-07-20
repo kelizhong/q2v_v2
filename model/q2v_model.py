@@ -245,8 +245,8 @@ class Q2VModel(object):
         labels = tf.cast(self.labels, self.dtype)
         src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
         tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
-        distance = 2 - 2 * tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((1 - distance), 0))))
+        distance = 1 - tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
+        loss = tf.add(tf.multiply(labels, distance), tf.multiply((1 - labels), 2 - distance))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
@@ -292,13 +292,14 @@ class Q2VModel(object):
         # tmp = tf.multiply(labels, tf.square(distance))
         # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
         # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), 2 + self.compute_cosine_distance(self.src_last_output, self.tgt_last_output)))
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(self.compute_cosine_distance(self.src_last_output, self.tgt_last_output))))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
+        margin = tf.constant(10.)
         # Euclidean distance between x1,x2
         distance = tf.sqrt(
             tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
@@ -308,41 +309,15 @@ class Q2VModel(object):
         #                         tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
 
         distance = tf.reshape(distance, [-1], name="distance")
+        # negative_loss = tf.nn.relu(margin - l2_loss_pairs)
 
         # tmp = y * tf.square(d)
         # tmp = tf.multiply(labels, tf.square(distance))
         # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
         # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((1 - distance), 0))))
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((margin - distance), 1))))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
-
-
-    def contrastive_loss_1(self):
-
-        src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
-        tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
-
-        labels = tf.cast(self.labels, self.dtype)
-        l2_loss_pairs = tf.reduce_sum(tf.square(src_last_output_normalize - tgt_last_output_normalize), 1)
-        positive_loss = l2_loss_pairs
-        margin = tf.constant(10.)
-        negative_loss = tf.nn.relu(margin - l2_loss_pairs)
-        final_loss = tf.multiply(labels, positive_loss) + tf.multiply(1. - labels, negative_loss)
-        loss_mean = tf.reduce_mean(final_loss)
-        return loss_mean
-
-    def contrastive_loss_2(self):
-        # compute src / tgt similarity
-        src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
-        tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
-        concat = tf.concat([src_last_output_normalize, tgt_last_output_normalize], axis=1)
-        input_layer = Dense(2, dtype=self.dtype, name='input_projection_loss')
-
-        # Embedded inputs having gone through input projection layer
-        concat = input_layer(concat)
-        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=concat, labels=self.labels))
-        return loss
 
     def init_loss(self):
 
