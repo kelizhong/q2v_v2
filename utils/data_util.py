@@ -130,29 +130,32 @@ def query_pair_generator_from_aksis_data(files, nouse=-1):
 
 
 def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
-    capacity = 65536
+    capacity = 65535
     rs = RandomSet(capacity)
     query_pair_set = RandomSet()
     for items in query_pair_generator_from_aksis_data(files, dropout):
         current_query_pair_set = set()
+        item_length = 0
         for item in combinations(items, 2):
-            if len(item[0].split()) < 2 or len(item[1].split()) < 2:
+            if len(item[0].split()) < 2 or len(item[1].split()) < 2 or item[0] in item[1] or item[1] in item[0]:
                 continue
+
             current_query_pair_set.add(item[0])
             current_query_pair_set.add(item[1])
-            if len(rs) > capacity - 100:
-                query_pair_set.add((item[0], item[1], aksis_data_label.positive_label.value))
-                for neg_query in rs.get_n_items(neg_number):
-                    query = random.choice(item)
-                    if query != neg_query:
-                        query_pair_set.add((query, neg_query, aksis_data_label.negative_label.value))
+            query_pair_set.add((item[0], item[1], aksis_data_label.positive_label.value))
+            item_length += 1
+            for neg_query in rs.get_n_items(neg_number):
+                query = random.choice(item)
+                if query != neg_query:
+                    query_pair_set.add((query, neg_query, aksis_data_label.negative_label.value))
+                    item_length += 1
         # rs.update(current_query_pair_set)
         if len(current_query_pair_set) > 1:
             rs.add(random.sample(current_query_pair_set, 1)[0])
 
         if len(query_pair_set) > capacity:
-            for _ in range(5):
-                ele = query_pair_set.pop()
+            for ele in query_pair_set.get_n_items(item_length):
+                query_pair_set.remove(ele)
                 yield ele
 
 

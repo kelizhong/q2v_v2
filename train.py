@@ -169,7 +169,7 @@ class Trainer(object):
                 step_time, loss = 0.0, 0.0
                 words_done, sents_done = 0, 0
                 data_stream = self.data_stream
-                for _, source_tokens, _, target_tokens, labels in data_stream:
+                for step, (_, source_tokens, _, target_tokens, labels) in enumerate(data_stream):
                     start_time = time.time()
                     logging.info("source_batch_zie:{}, target_batch_zie:{}", len(source_tokens), len(target_tokens))
                     source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
@@ -185,22 +185,22 @@ class Trainer(object):
                                             tgt_inputs=target_tokens, tgt_inputs_length=target_lens, labels=labels)
                     time_elapsed = time.time() - start_time
                     step_time = time_elapsed / self.display_freq
-                    loss += step_loss / self.display_freq
+                    loss += step_loss
                     words_done += float(np.sum(source_lens + target_lens))
                     sents_done += float(source_tokens.shape[0])  # batch_size
-
+                    avg_loss = loss/(step+1)
                     # Increase the epoch index of the model
                     model.global_epoch_step_op.eval()
                     if model.global_step.eval() % self.display_freq == 0:
-                        avg_perplexity = math.exp(float(loss)) if loss < 300 else float("inf")
+                        avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
                         words_per_sec = words_done / time_elapsed
                         sents_per_sec = sents_done / time_elapsed
                         logging.info(
-                            "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.4f, loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
-                            (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, loss, avg_perplexity,
+                            "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.4f, avg-loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
+                            (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, avg_loss, avg_perplexity,
                              sents_per_sec, words_per_sec))
                         # set zero timer and loss.
-                        words_done, sents_done, loss = 0.0, 0.0, 0.0
+                        words_done, sents_done = 0.0, 0.0
 
             sv.stop()
 

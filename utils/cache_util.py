@@ -28,3 +28,6 @@ class RandomSet(object):
             self.set.remove(elem[0])
             return elem[0]
         return None
+
+    def remove(self, ele):
+        self.set.remove(ele)

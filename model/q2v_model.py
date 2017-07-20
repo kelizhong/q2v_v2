@@ -119,9 +119,10 @@ class Q2VModel(object):
         return MultiRNNCell([self.build_single_cell() for _ in range(self.num_layers)])
 
     def _init_embedding_layer(self):
+        # create word embedding vectors
         self.encoder_embeddings = tf.get_variable(name='embedding',
                                               shape=[self.max_vocabulary_size, self.embedding_size],
-                                              initializer=tf.random_uniform_initializer(-0.25, 0.25), dtype=self.dtype)
+                                              initializer=tf.random_uniform_initializer(-1.0, 1.0), dtype=self.dtype)
 
     def build_source_encoder(self):
         logging.info("building source encoder..")
@@ -257,6 +258,44 @@ class Q2VModel(object):
         tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
         return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
 
+    @staticmethod
+    def compute_euclidean_distance(x, y):
+        """
+        Computes the euclidean distance between two tensors
+        """
+
+        with tf.name_scope('euclidean_distance') as scope:
+            distance = tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(x, y)), 1))
+        return distance
+
+    @staticmethod
+    def compute_cosine_distance(x, y):
+        x_normalize = tf.nn.l2_normalize(x, dim=1)
+        y_normalize = tf.nn.l2_normalize(y, dim=1)
+        distance = tf.losses.cosine_distance(x_normalize, y_normalize, dim=1)
+        return distance
+
+    def contrastive_loss_distance(self):
+
+        labels = tf.cast(self.labels, self.dtype)
+        # Euclidean distance between x1,x2
+        distance = tf.sqrt(
+            tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
+
+        # distance = tf.div(distance,
+        #                  tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
+        #                         tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
+
+        distance = tf.reshape(distance, [-1], name="distance")
+
+        # tmp = y * tf.square(d)
+        # tmp = tf.multiply(labels, tf.square(distance))
+        # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
+        # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), 2 + self.compute_cosine_distance(self.src_last_output, self.tgt_last_output)))
+        loss_mean = tf.reduce_mean(loss)
+        return loss_mean
+
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
@@ -264,9 +303,9 @@ class Q2VModel(object):
         distance = tf.sqrt(
             tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
 
-        distance = tf.div(distance,
-                          tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
-                                 tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
+        # distance = tf.div(distance,
+        #                  tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
+        #                         tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
 
         distance = tf.reshape(distance, [-1], name="distance")
 
@@ -308,6 +347,7 @@ class Q2VModel(object):
     def init_loss(self):
 
         with tf.name_scope("loss"):
+            # self.loss = self.contrastive_loss_distance()
             self.loss = self.contrastive_loss()
             # self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
