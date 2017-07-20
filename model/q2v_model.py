@@ -7,6 +7,7 @@ from tensorflow.python.ops.rnn_cell import GRUCell
 from tensorflow.python.ops.rnn_cell import LSTMCell, LSTMStateTuple
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
+from tensorflow.contrib.opt.python.training import nadam_optimizer
 
 import logbook as logging
 from external.cocob_optimizer import COCOB
