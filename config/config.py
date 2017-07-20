@@ -18,7 +18,7 @@ special_words = {_GO: start_token, EOS: end_token}
 tf.app.flags.DEFINE_integer("batch_size", 128,
                             "Batch size to use during training(positive pair count based).")
 tf.app.flags.DEFINE_string("model_dir", os.path.join(project_dir, 'data/models'), "Trained model directory.")
-tf.app.flags.DEFINE_integer("display_freq", 10,
+tf.app.flags.DEFINE_integer("display_freq", 1,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_string("gpu", None, "specify the gpu to use")
 tf.app.flags.DEFINE_string("log_file_name", os.path.join(project_dir, 'data/logs', 'q2v.log'), "Log data file name")

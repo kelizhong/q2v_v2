@@ -1,8 +1,9 @@
+import sys
 import random
 
 
 class RandomSet(object):
-    def __init__(self, capacity=65536):
+    def __init__(self, capacity=sys.maxsize):
         self.capacity = capacity
         self.set = set()
 

@@ -132,7 +132,7 @@ def query_pair_generator_from_aksis_data(files, nouse=-1):
 def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
     capacity = 65536
     rs = RandomSet(capacity)
-    query_pair_set = RandomSet(capacity)
+    query_pair_set = RandomSet()
     for items in query_pair_generator_from_aksis_data(files, dropout):
         current_query_pair_set = set()
         for item in combinations(items, 2):
@@ -150,12 +150,10 @@ def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
         if len(current_query_pair_set) > 1:
             rs.add(random.sample(current_query_pair_set, 1)[0])
 
-        for _ in range(5):
-            ele = query_pair_set.pop()
-            if ele:
+        if len(query_pair_set) > capacity:
+            for _ in range(5):
+                ele = query_pair_set.pop()
                 yield ele
-            else:
-                break
 
 
 def negative_sampling_train_data_generator(files, neg_number, dropout=-1):
