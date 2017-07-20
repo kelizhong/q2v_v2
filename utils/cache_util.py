@@ -25,3 +25,5 @@ class RandomSet(object):
         elem = self.get_n_items(1)
         if len(elem) > 0:
             self.set.remove(elem[0])
+            return elem[0]
+        return None

@@ -31,7 +31,7 @@ class BatchDataHandler(object):
     def insert_data_object(self, source, source_tokens, target, target_tokens, label_id):
         if self.data_object_length == self.batch_size:
             self.clear_data_object()
-        if len(source_tokens) > 0:
+        if source and target and len(source_tokens) > 0 and len(target_tokens) > 0:
             self._sources.append(source)
             self._source_tokens.append(source_tokens)
             self._targets.append(target)
