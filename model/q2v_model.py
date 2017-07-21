@@ -323,8 +323,8 @@ class Q2VModel(object):
 
         with tf.name_scope("loss"):
             # self.loss = self.contrastive_loss_distance()
-            self.loss = self.contrastive_loss()
-            # self.loss = self.cos_similarity_loss()
+            # self.loss = self.contrastive_loss()
+            self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
@@ -400,7 +400,6 @@ class Q2VModel(object):
         """
         logging.info("setting optimizer..")
         # Gradients and SGD update operation for training the model
-        trainable_params = tf.trainable_variables()
         if self.optimizer.lower() == 'adadelta':
             self.opt = tf.train.AdadeltaOptimizer(learning_rate=self.learning_rate)
         elif self.optimizer.lower() == 'adam':

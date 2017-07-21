@@ -82,18 +82,16 @@ class BatchDataTrigramHandler(BatchDataHandler):
 
     def parse_and_insert_data_object(self, source, target, label=1):
         """parse data using trigram parser, insert it to data_object to generate batch data"""
-        target_tokens, target = None, None
+        _target_tokens, _target = None, None
         if self.enable_target:
             if target and len(target.split()) >= self.min_words:
-                target_tokens, target = trigram_encoding(target, self.vocabulary)
+                _target_tokens, _target = trigram_encoding(target, self.vocabulary)
             else:
-                logging.error("BatchDataTrigramHandler parse object: allow target, but the target is None or length is 0")
                 return self.data_object
-
         if source and len(source.split()) >= self.min_words:
             # discard source with length less than `min_words`
-            source_tokens, source = trigram_encoding(source, self.vocabulary)
-            data_object = self.insert_data_object(source, source_tokens, target, target_tokens, label)
+            _source_tokens, _source = trigram_encoding(source, self.vocabulary)
+            data_object = self.insert_data_object(_source, _source_tokens, _target, _target_tokens, label)
         else:
             data_object = self.data_object
         return data_object

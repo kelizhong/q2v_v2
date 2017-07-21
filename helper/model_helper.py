@@ -19,6 +19,7 @@ def create_model(session, mode='train', model_name='q2v'):
         model.saver.restore(session, ckpt.model_checkpoint_path)
 
     else:
+        assert mode == 'train', "Can not find existed model, please double check your model path"
         logging.info("Created model with fresh parameters.")
         session.run(tf.global_variables_initializer())
 
