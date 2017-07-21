@@ -40,8 +40,6 @@ class BatchDataHandler(object):
                 self._target_tokens.append(target_tokens)
                 self._labels.append(label_id)
             else:
-                logging.error(source)
-                logging.error(target)
                 logging.error("BatchDataHandler insert object: allow target, but the target is None or length is 0")
                 self.validate_data_object_size()
                 return self.data_object

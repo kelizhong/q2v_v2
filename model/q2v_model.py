@@ -94,8 +94,6 @@ class Q2VModel(object):
         self.src_inputs_length = tf.placeholder(
             dtype=tf.int32, shape=(None,), name='source_inputs_length')
 
-        self.src_partitions = tf.placeholder(tf.int32, [None], name='source_partitions')
-
         # get dynamic batch_size
         self.batch_size = tf.to_float(tf.shape(self.src_inputs)[0])
 
@@ -106,8 +104,6 @@ class Q2VModel(object):
             # decoder_inputs_length: [batch_size]
             self.tgt_inputs_length = tf.placeholder(
                 dtype=tf.int32, shape=(None,), name='target_inputs_length')
-
-            self.tgt_partitions = tf.placeholder(tf.int32, [None], name='target_partitions')
 
             self.labels = tf.placeholder(tf.int32, [None], name='labels')
 
@@ -176,7 +172,6 @@ class Q2VModel(object):
                     else:
                         self.src_last_state.append(tf.concat([f, b], 1))
                 self.src_outputs = tf.concat([self.src_outputs[0], self.src_outputs[1]], axis=2)
-                output_size = self.fw_encoder_cell.output_size + self.bw_encoder_cell.output_size
 
             else:
                 logging.info("building encoder..")
@@ -189,9 +184,8 @@ class Q2VModel(object):
                     cell=self.encoder_cell, inputs=src_inputs_embedded,
                     sequence_length=self.src_inputs_length, dtype=self.dtype,
                     time_major=False)
-                output_size = self.encoder_cell.output_size
             # [batch_size, hidden unit]
-            self.src_last_output = self._last_output(self.src_outputs, output_size, self.src_partitions)
+            self.src_last_output = self.extract_last_output(self.src_outputs, self.src_inputs_length-1)
 
     def build_target_encoder(self):
         logging.info("building target encoder..")
@@ -230,7 +224,6 @@ class Q2VModel(object):
                     else:
                         self.tgt_last_state.append(tf.concat([f, b], 1))
                 self.tgt_outputs = tf.concat([self.tgt_outputs[0], self.tgt_outputs[1]], axis=2)
-                output_size = self.fw_encoder_cell.output_size + self.bw_encoder_cell.output_size
 
             else:
                 logging.info("building encoder..")
@@ -242,19 +235,23 @@ class Q2VModel(object):
                     cell=self.encoder_cell, inputs=tgt_inputs_embedded,
                     sequence_length=self.tgt_inputs_length, dtype=self.dtype,
                     time_major=False)
-                output_size = self.encoder_cell.output_size
 
-            self.tgt_last_output = self._last_output(self.tgt_outputs, output_size, self.tgt_partitions)
+            self.tgt_last_output = self.extract_last_output(self.tgt_outputs, self.tgt_inputs_length-1)
 
     @staticmethod
-    def _last_output(output, output_size, partitions):
-        outputs = tf.reshape(tf.stack(output), [-1, output_size])
+    def extract_last_output(output, ind):
+        """
+        Get specified elements along the first axis of tensor.
+        :param data: Tensorflow tensor that will be subsetted.
+        :param ind: Indices to take (one for each element along axis 0 of data).
+        :return: Subsetted tensor.
+        """
 
-        num_partitions = 2
+        batch_range = tf.range(tf.shape(output)[0])
+        indices = tf.stack([batch_range, ind], axis=1)
+        res = tf.gather_nd(output, indices)
 
-        res_out = tf.dynamic_partition(outputs, partitions, num_partitions)
-
-        return res_out[1]
+        return res
 
     def cos_similarity_loss(self):
         labels = tf.cast(self.labels, self.dtype)
@@ -311,7 +308,6 @@ class Q2VModel(object):
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
-
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
@@ -339,12 +335,11 @@ class Q2VModel(object):
 
         with tf.name_scope("loss"):
             # self.loss = self.contrastive_loss_distance()
-            # self.loss = self.contrastive_loss()
-            self.loss = self.cos_similarity_loss()
+            self.loss = self.contrastive_loss()
+            # self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
 
-    def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
-                    labels):
+    def check_feeds(self, src_inputs, src_inputs_length, tgt_inputs, tgt_inputs_length, labels):
         """
         Args:
           src_inputs: a numpy int matrix of [batch_size, max_source_time_steps]
@@ -377,13 +372,11 @@ class Q2VModel(object):
 
         input_feed[self.src_inputs.name] = src_inputs
         input_feed[self.src_inputs_length.name] = src_inputs_length
-        input_feed[self.src_partitions.name] = src_partitions
 
         if self.mode == 'train':
             input_feed[self.tgt_inputs.name] = tgt_inputs
             input_feed[self.tgt_inputs_length.name] = tgt_inputs_length
             input_feed[self.labels.name] = labels
-            input_feed[self.tgt_partitions.name] = tgt_partitions
 
         return input_feed
 
@@ -392,14 +385,7 @@ class Q2VModel(object):
         if self.mode.lower() != 'train':
             raise ValueError("train step can only be operated in train mode")
 
-        src_inputs_max_seq_length = src_inputs.shape[1]
-        src_partitions = self._generate_partition(src_inputs_length, src_inputs_max_seq_length)
-
-        tgt_inputs_max_seq_length = tgt_inputs.shape[1]
-        tgt_partitions = self._generate_partition(tgt_inputs_length, tgt_inputs_max_seq_length)
-
-        input_feed = self.check_feeds(src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length,
-                                      tgt_partitions, labels)
+        input_feed = self.check_feeds(src_inputs, src_inputs_length, tgt_inputs, tgt_inputs_length, labels)
 
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = self.keep_prob
@@ -450,7 +436,7 @@ class Q2VModel(object):
             self.init_token_op = self.opt.get_init_tokens_op()
             self.chief_queue_runner = self.opt.get_chief_queue_runner()
 
-        self._add_post_train_ops()
+        # self._add_post_train_ops()
 
     def _add_post_train_ops(self):
         """
@@ -464,28 +450,14 @@ class Q2VModel(object):
         with tf.control_dependencies([self.updates]):
             self.updates = tf.group(self.updates, *self._post_train_ops)
 
-    @staticmethod
-    def _generate_partition(seqlen, max_seq_length):
-        batch_size = len(seqlen)
-        partitions = [0] * (batch_size * max_seq_length)
-        step = 0
-        for each in seqlen:
-            idx = each + max_seq_length * step
-            partitions[idx - 1] = 1
-            step += 1
-        return partitions
-
     def encode(self, sess, src_inputs, src_inputs_length):
 
         assert self.mode == 'encode', "encode function only support encode mode"
-        max_seq_length = src_inputs.shape[1]
-        src_partitions = self._generate_partition(src_inputs_length, max_seq_length)
-        input_feed = self.check_feeds(src_inputs, src_inputs_length, src_partitions,
-                                      tgt_inputs=None, tgt_inputs_length=None, tgt_partitions=None, labels=None)
+        input_feed = self.check_feeds(src_inputs, src_inputs_length,
+                                      tgt_inputs=None, tgt_inputs_length=None, labels=None)
 
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = 1.0
-        input_feed[self.src_partitions.name] = src_partitions
 
         output_feed = [self.src_last_output]
         outputs = sess.run(output_feed, input_feed)

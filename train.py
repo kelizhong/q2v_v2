@@ -171,14 +171,11 @@ class Trainer(object):
                 data_stream = self.data_stream
                 for step, (_, source_tokens, _, target_tokens, labels) in enumerate(data_stream):
                     start_time = time.time()
-                    logging.info("source_batch_zie:{}, target_batch_zie:{}", len(source_tokens), len(target_tokens))
                     source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                     # Get a batch from training parallel data
                     if source_tokens is None or target_tokens is None or len(source_tokens) == 0 or len(target_tokens) == 0:
                         logging.warn('No samples under source_max_seq_length {} or target_max_seq_length {}', self.source_maxlen, self.target_maxlen)
                         continue
-
-                    logging.info("source_batch_zie_1:{}, target_batch_zie_1:{}", len(source_tokens), len(target_tokens))
 
                     # Execute a single training step
                     step_loss = model.train(sess, src_inputs=source_tokens, src_inputs_length=source_lens,
@@ -196,7 +193,7 @@ class Trainer(object):
                         words_per_sec = words_done / time_elapsed
                         sents_per_sec = sents_done / time_elapsed
                         logging.info(
-                            "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.4f, avg-loss:%.4f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
+                            "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
                             (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, avg_loss, avg_perplexity,
                              sents_per_sec, words_per_sec))
                         # set zero timer and loss.

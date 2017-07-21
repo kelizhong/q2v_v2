@@ -16,7 +16,7 @@ from config.config import special_words
 
 
 class AksisParserWorker(Process):
-    """Parser worker to tokenzie the aksis data and convert them to id
+    """Parser worker to tokenize the aksis data and convert them to id
 
     Parameters
     ----------

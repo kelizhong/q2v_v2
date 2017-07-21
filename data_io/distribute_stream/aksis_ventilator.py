@@ -76,5 +76,5 @@ class AksisDataVentilatorProcess(Process):
                                                                                                   self.data_dir))
         # action_files = [os.path.join(self.data_dir, filename) for filename in data_files]
 
-        for source, target, label in negative_sampling_train_data_generator(data_files, self.neg_number, self.dropout):
+        for source, target, label in negative_sampling_query_pair_data_generator(data_files, self.neg_number, self.dropout):
             yield source, target, label

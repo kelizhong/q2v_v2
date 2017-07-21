@@ -102,7 +102,7 @@ class Inference(object):
     @memoized
     def vocabulary(self):
         """load vocabulary"""
-        vocab = VocabularyFromCustomStringTrigram(FLAGS.vocabulary_data_dir).build_vocabulary_from_pickle()
+        vocab = VocabularyFromCustomStringTrigram(FLAGS.vocabulary_data_dir, top_words=64005).build_vocabulary_from_pickle()
         return vocab
 
 

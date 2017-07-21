@@ -37,7 +37,7 @@ def parse_args():
     q2v_aksis_ventilator_parser.add_argument('--port', type=str, help='zmq port')
     q2v_aksis_ventilator_parser.add_argument('-bs', '--batch-size', default=128, type=int,
                                               help='batch size for each databatch')
-    q2v_aksis_ventilator_parser.add_argument('--top-words', default=sys.maxsize, type=int,
+    q2v_aksis_ventilator_parser.add_argument('--top-words', default=64005, type=int,
                                               help='the max sample num for training')
     q2v_aksis_ventilator_parser.add_argument('--worker-num', default=1, type=int,
                                               help='number of parser worker')
