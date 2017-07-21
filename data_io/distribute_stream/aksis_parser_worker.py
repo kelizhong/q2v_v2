@@ -20,7 +20,7 @@ class AksisParserWorker(Process):
 
     Parameters
     ----------
-        vocabulary_path: str
+        vocabulary_data_dir: str
             Path for vocabulary from aksis corpus data
         top_words: int
             Only use the top_words in vocabulary

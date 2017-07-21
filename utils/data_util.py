@@ -145,8 +145,8 @@ def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
             query_pair_set.add((item[0], item[1], aksis_data_label.positive_label.value))
             item_length += 1
             for neg_query in rs.get_n_items(neg_number):
-                query = random.choice(item)
-                if query != neg_query:
+                query = item[0]
+                if query != neg_query and query not in neg_query and neg_query not in query:
                     query_pair_set.add((query, neg_query, aksis_data_label.negative_label.value))
                     item_length += 1
         # rs.update(current_query_pair_set)
@@ -160,12 +160,13 @@ def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
 
 
 def negative_sampling_train_data_generator(files, neg_number, dropout=-1):
-    rs = RandomSet()
+    capacity = 65535
+    rs = RandomSet(capacity)
     for query, title in query_title_score_generator_from_aksis_data(files, dropout):
-        rs.add(title)
         yield query, title, aksis_data_label.positive_label.value
         for neg_title in rs.get_n_items(neg_number):
             yield query, neg_title, aksis_data_label.negative_label.value
+        rs.add(title)
 
 
 def is_hit(score, dropout):
@@ -339,6 +340,9 @@ def trigram_encoding(data, trigram_dict, return_data=True):
 
 # batch preparation of a given sequence pair for training
 def prepare_train_pair_batch(seqs_x, seqs_y, source_maxlen=sys.maxsize, target_maxlen=sys.maxsize, dtype='int32'):
+    if len(seqs_x) != len(seqs_y):
+        raise ValueError("Sequence lengths must be equal in their "
+                         "batch_size, %d != %d" % (len(seqs_x), len(seqs_y)))
     # seqs_x, seqs_y: a list of sentences
     seqs_x = list(map(lambda x: x[:source_maxlen], seqs_x))
     seqs_y = list(map(lambda x: x[:target_maxlen], seqs_y))

@@ -261,7 +261,7 @@ class Q2VModel(object):
         src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
         tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
         distance = tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
-        loss = tf.add(tf.multiply(labels, 1 - distance), tf.multiply((1 - labels), 1 + distance))
+        loss = tf.add(tf.multiply(labels, tf.maximum(1 - distance, 0)), tf.multiply((1 - labels), tf.maximum(1 + distance, 0)))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
@@ -339,8 +339,8 @@ class Q2VModel(object):
 
         with tf.name_scope("loss"):
             # self.loss = self.contrastive_loss_distance()
-            self.loss = self.contrastive_loss()
-            # self.loss = self.cos_similarity_loss()
+            # self.loss = self.contrastive_loss()
+            self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,
