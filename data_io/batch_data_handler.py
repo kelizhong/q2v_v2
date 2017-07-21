@@ -34,18 +34,34 @@ class BatchDataHandler(object):
         if self.data_object_length == self.batch_size:
             self.clear_data_object()
         if self.enable_target:
-            if target and len(target_tokens):
+            if target and len(target_tokens) > 0:
                 self._targets.append(target)
                 self._target_tokens.append(target_tokens)
                 self._labels.append(label_id)
             else:
                 logging.error("BatchDataHandler insert object: allow target, but the target is None or length is 0")
+                self.validate_data_object_size()
                 return self.data_object
         if source and len(source_tokens) > 0:
             self._sources.append(source)
             self._source_tokens.append(source_tokens)
+        elif self.enable_target and target and len(target_tokens) > 0:
+            self._targets.pop()
+            self._target_tokens.pop()
+            self._labels.pop()
+
+        if self.enable_target:
+            self.validate_data_object_size()
 
         return self.data_object
+
+    def validate_data_object_size(self):
+        if len(self._sources) != len(self._targets) or len(self._source_tokens) != len(self._target_tokens) \
+                or len(self._source_tokens) != len(self._labels):
+            raise ValueError("Data object must be equal in their "
+                             "batch_size, sources_size:%d, source_tokens_size:%d, targets_size:%d, targets_tokens_size:%d, labels_size:%d" % (
+                             len(self._sources), len(self._source_tokens), len(self._targets), len(self._target_tokens),
+                             len(self._labels)))
 
     def clear_data_object(self):
         del self._sources[:]

@@ -69,6 +69,18 @@ class Q2VModel(object):
             self.init_loss()
             self.init_optimizer()
 
+    @staticmethod
+    def dense_batch_relu(x, phase, scope):
+        with tf.variable_scope(scope):
+            h1 = tf.contrib.layers.fully_connected(x, 100,
+                                                   activation_fn=None,
+                                                   scope='dense')
+            h2 = tf.contrib.layers.batch_norm(h1,
+                                              center=True, scale=True,
+                                              is_training=phase,
+                                              scope='bn')
+            return tf.nn.relu(h2, 'relu')
+
     def init_placeholders(self):
 
         self.keep_prob_placeholder = tf.placeholder(self.dtype, shape=[], name='keep_prob')
@@ -132,6 +144,8 @@ class Q2VModel(object):
             src_inputs_embedded = tf.nn.embedding_lookup(
                 params=self.encoder_embeddings, ids=self.src_inputs)
 
+            # src_inputs_embedded = self.dense_batch_relu(src_inputs_embedded, True, scope=scope)
+
             if self.use_residual:
                 # Input projection layer to feed embedded inputs to the cell
                 # ** Essential when use_residual=True to match input/output dims
@@ -186,6 +200,7 @@ class Q2VModel(object):
             # Embedded_inputs: [batch_size, time_step, embedding_size]
             tgt_inputs_embedded = tf.nn.embedding_lookup(
                 params=self.encoder_embeddings, ids=self.tgt_inputs)
+            # tgt_inputs_embedded = self.dense_batch_relu(tgt_inputs_embedded, True, scope=scope)
 
             if self.use_residual:
                 # Input projection layer to feed embedded inputs to the cell
@@ -245,8 +260,8 @@ class Q2VModel(object):
         labels = tf.cast(self.labels, self.dtype)
         src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
         tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
-        distance = 1 - tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
-        loss = tf.add(tf.multiply(labels, distance), tf.multiply((1 - labels), 2 - distance))
+        distance = tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
+        loss = tf.add(tf.multiply(labels, 1 - distance), tf.multiply((1 - labels), 1 + distance))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
@@ -296,10 +311,11 @@ class Q2VModel(object):
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
+
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
-        margin = tf.constant(10.)
+        margin = tf.constant(5.)
         # Euclidean distance between x1,x2
         distance = tf.sqrt(
             tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
@@ -315,7 +331,7 @@ class Q2VModel(object):
         # tmp = tf.multiply(labels, tf.square(distance))
         # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
         # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((margin - distance), 1))))
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((margin - distance), 0))))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
@@ -323,8 +339,8 @@ class Q2VModel(object):
 
         with tf.name_scope("loss"):
             # self.loss = self.contrastive_loss_distance()
-            # self.loss = self.contrastive_loss()
-            self.loss = self.cos_similarity_loss()
+            self.loss = self.contrastive_loss()
+            # self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, src_partitions, tgt_inputs, tgt_inputs_length, tgt_partitions,

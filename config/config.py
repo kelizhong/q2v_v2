@@ -28,13 +28,13 @@ tf.app.flags.DEFINE_string("vocabulary_data_dir", os.path.join(project_dir, 'dat
 tf.app.flags.DEFINE_boolean('debug', False, 'Enable debug')
 
 # Network parameters
-tf.app.flags.DEFINE_integer("num_layers", 3, "Number of layers in the model.")
-tf.app.flags.DEFINE_integer("embedding_size", 256, "Size of word embedding vector.")
+tf.app.flags.DEFINE_integer("num_layers", 1, "Number of layers in the model.")
+tf.app.flags.DEFINE_integer("embedding_size", 128, "Size of word embedding vector.")
 tf.app.flags.DEFINE_boolean('bidirectional', True, 'Enable bidirectional encoder')
-tf.app.flags.DEFINE_integer('hidden_units', 128, 'Number of hidden units in each layer')
+tf.app.flags.DEFINE_integer('hidden_units', 64, 'Number of hidden units in each layer')
 tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 instead of float32 as dtype')
 tf.app.flags.DEFINE_string('cell_type', 'lstm', 'RNN cell for encoder and decoder, default: lstm')
-tf.app.flags.DEFINE_float('dropout_rate', 0.3, 'Dropout probability for input/output/state units (0.0: no dropout)')
+tf.app.flags.DEFINE_float('dropout_rate', 0.5, 'Dropout probability for input/output/state units (0.0: no dropout)')
 tf.app.flags.DEFINE_boolean('use_dropout', True, 'Use dropout in each rnn cell')
 tf.app.flags.DEFINE_boolean('use_residual', False, 'Use residual connection between layers')
 tf.app.flags.DEFINE_integer('max_vocabulary_size', 64005, 'Source vocabulary size')
@@ -56,7 +56,7 @@ tf.app.flags.DEFINE_boolean("is_sync", True, "whether to synchronize, aggregate 
 # Training parameters
 tf.app.flags.DEFINE_float('learning_rate', 0.002, 'Learning rate')
 tf.app.flags.DEFINE_float('min_learning_rate', 0.0002, 'minimum Learning rate')
-tf.app.flags.DEFINE_integer('decay_steps', 10000, 'how many steps to update the learning rate.')
+tf.app.flags.DEFINE_integer('decay_steps', 1000, 'how many steps to update the learning rate.')
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.9, "Learning rate decays by this much.")
 
 FLAGS = tf.app.flags.FLAGS
