@@ -90,6 +90,7 @@ class AksisDataPipeline(object):
                                        frontend_port=self.rawdata_backend_port,
                                        backend_port=self.collector_fronted_port,
                                        words_list_file=self.words_list_file,
+                                       first_worker=(i==0),
                                        name="aksis_parser_worker_{}".format(i))
             worker.start()
 

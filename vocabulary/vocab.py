@@ -56,6 +56,7 @@ class VocabularyBase(object):
             vocab = load_pickle_object(self.vocab_path)
         else:
             vocab = dict()
+            vocab.update(self.special_words)
             with codecs.open(words_list_file, encoding='utf-8', errors='ignore') as f:
                 for word in f:
                     word = word.strip().lower()

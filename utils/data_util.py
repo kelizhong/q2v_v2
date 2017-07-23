@@ -186,8 +186,6 @@ def data_encoding(data, vocabulary, ngram=3, return_data=True):
                 data_index.extend(words_index_lookup(words_list, vocabulary))
 
     result = data_index, data if return_data else data_index
-    print(data)
-    print(data_index)
     return result
 
 

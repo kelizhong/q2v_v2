@@ -1,6 +1,4 @@
 # coding=utf-8
-import math
-
 import tensorflow as tf
 from tensorflow.python.layers.core import Dense
 from tensorflow.python.ops.rnn_cell import GRUCell

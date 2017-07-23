@@ -12,6 +12,7 @@ from config.config import FLAGS
 from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
 from config.config import vocabulary_size
+from config.config import special_words
 
 
 class Inference(object):
@@ -103,7 +104,7 @@ class Inference(object):
     @memoized
     def vocabulary(self):
         """load vocabulary"""
-        vocab = VocabularyFromWordList(FLAGS.vocabulary_data_dir, top_words=vocabulary_size).build_vocabulary_from_words_list()
+        vocab = VocabularyFromWordList(FLAGS.vocabulary_data_dir, top_words=vocabulary_size, special_words=special_words).build_vocabulary_from_words_list()
         return vocab
 
 

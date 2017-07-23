@@ -2,7 +2,7 @@ from vocabulary.vocab import VocabularyFromWordList
 from utils.data_util import siamese_data_generator
 from ..batch_data_handler import BatchDataTrigramHandler
 from utils.decorator_util import memoized
-
+from config.config import special_words
 
 class AksisDataStream(object):
     def __init__(self, vocabulary_data_dir, top_words, batch_size, raw_data_path=None, words_list_file=None):
@@ -25,5 +25,5 @@ class AksisDataStream(object):
     @memoized
     def vocabulary(self):
         """load vocabulary"""
-        vocab = VocabularyFromWordList(self.vocabulary_data_dir, top_words=self.top_words).build_vocabulary_from_words_list(self.words_list_file)
+        vocab = VocabularyFromWordList(self.vocabulary_data_dir, top_words=self.top_words, special_words=special_words).build_vocabulary_from_words_list(self.words_list_file)
         return vocab
