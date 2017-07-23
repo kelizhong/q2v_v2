@@ -62,7 +62,7 @@ class VocabularyBase(object):
                     word = word.strip().lower()
                     if word not in vocab:
                         vocab[word] = len(vocab)
-                    if len(vocab) > self.top_words:
+                    if len(vocab) > self.top_words - 1:
                         break
             save_obj_pickle(vocab, self.vocab_path, True)
         return vocab

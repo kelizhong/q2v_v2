@@ -9,7 +9,7 @@ from nltk import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from enum import Enum, unique
 import numpy as np
-from config.config import end_token
+from config.config import end_token, unk_token
 
 wn_lemmatizer = WordNetLemmatizer()
 
@@ -186,6 +186,7 @@ def data_encoding(data, vocabulary, ngram=3, return_data=True):
                 data_index.extend(words_index_lookup(words_list, vocabulary))
 
     result = data_index, data if return_data else data_index
+
     return result
 
 
@@ -198,7 +199,7 @@ def ngram_tokenize_word(word, ngram):
 def words_index_lookup(words_list, vocabulary):
     if not isinstance(words_list, list):
         words_list = [words_list]
-    words_index = [vocabulary[d] if d in vocabulary else len(vocabulary) + 1 for d in words_list]
+    words_index = [vocabulary[d] if d in vocabulary else unk_token for d in words_list]
     return words_index
 
 

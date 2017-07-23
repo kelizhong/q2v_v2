@@ -5,17 +5,19 @@ import tensorflow as tf
 project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir))
 
 # Extra vocabulary symbols
-_GO = '_GO'
-EOS = '_EOS' # also function as PAD
+_GO = '_GO_'
+_EOS = '_EOS_' # also function as PAD
+_UNK = '_UNK_'
 
-extra_tokens = [_GO, EOS]
+extra_tokens = [_GO, _EOS, _UNK]
 
-start_token = extra_tokens.index(_GO)	# start_token = 0
-end_token = extra_tokens.index(EOS)	# end_token = 1
+start_token = extra_tokens.index(_GO)  # start_token = 0
+end_token = extra_tokens.index(_EOS)	 # end_token = 1
+unk_token = extra_tokens.index(_UNK)	 # unknown_token = 2
 
-special_words = {_GO: start_token, EOS: end_token}
+special_words = {_GO: start_token, _EOS: end_token, _UNK: unk_token}
 
-vocabulary_size = 132922 + 1 + len(special_words)
+vocabulary_size = 132922 + len(special_words)
 
 # Run time variables
 tf.app.flags.DEFINE_string("model_dir", os.path.join(project_dir, 'data/models'), "Trained model directory.")
