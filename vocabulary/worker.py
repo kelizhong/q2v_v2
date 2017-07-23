@@ -4,7 +4,7 @@ import logbook as logging
 from multiprocessing import Process
 import zmq
 from zmq.decorators import socket
-from utils.data_util import tokenize
+from utils.data_util import tokenize, parse_aksis_query_data
 from utils.appmetric_util import with_meter
 from utils.retry_util import retry
 
@@ -50,5 +50,5 @@ class WorkerProcess(Process):
             except zmq.ZMQError as e:
                 logging.error(e)
                 break
-            tokens = tokenize(sentence)
+            tokens = parse_aksis_query_data(sentence)
             sender.send_pyobj(tokens)

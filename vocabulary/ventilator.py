@@ -2,6 +2,7 @@
 """Ventilator process to read the data from sentence_gen generator"""
 from __future__ import print_function
 import logbook as logging
+import glob
 from multiprocessing import Process
 from collections import Counter
 import zmq
@@ -9,6 +10,7 @@ from zmq.decorators import socket
 from vocabulary.worker import WorkerProcess
 from vocabulary.collector import CollectorProcess
 from utils.data_util import sentence_gen
+from utils.pickle_util import save_obj_pickle
 
 
 class VentilatorProcess(Process):
@@ -43,18 +45,21 @@ class VentilatorProcess(Process):
         logging.info("start sentence producer {}", self.name)
         for filename in self.corpus_files:
             logging.info("Counting words in {}", filename)
-            for sentence in self.sentence_gen(filename):
+            for num, sentence in enumerate(self.sentence_gen(filename)):
+                if num % 10000 == 0:
+                    print(num)
                 sender.send_string(sentence)
 
 
 if __name__ == '__main__':
     """for test"""
-    v = VentilatorProcess('../data/query2vec/train_corpus/search.keyword.enc', '127.0.0.1', '5555')
+    files = glob.glob("/Users/keliz/Downloads/aksis.purchased.pair/part*")
+    v = VentilatorProcess(files, '127.0.0.1', '5555')
     for _ in range(8):
         w = WorkerProcess('127.0.0.1', '5555', '5556')
         w.start()
     c = CollectorProcess('127.0.0.1', '5556')
     v.start()
     counter = Counter(c.collect())
-
+    save_obj_pickle(counter, './counter.pkl', overwrite=True)
     print(v.is_alive())

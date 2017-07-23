@@ -1,15 +1,13 @@
 # coding=utf-8
 # pylint: disable=too-many-instance-attributes, too-many-arguments
 """ventilator that read/produce the corpus data"""
-import os
 from multiprocessing import Process
-import fnmatch
+import glob
 import logbook as logging
 import zmq
 from zmq.decorators import socket
-import glob
 from utils.appmetric_util import AppMetric
-from utils.data_util import negative_sampling_train_data_generator, negative_sampling_query_pair_data_generator
+from utils.data_util import siamese_data_generator
 
 
 class AksisDataVentilatorProcess(Process):
@@ -76,5 +74,5 @@ class AksisDataVentilatorProcess(Process):
                                                                                                   self.data_dir))
         # action_files = [os.path.join(self.data_dir, filename) for filename in data_files]
 
-        for source, target, label in negative_sampling_query_pair_data_generator(data_files, self.neg_number, self.dropout):
+        for source, target, label in siamese_data_generator(data_files):
             yield source, target, label

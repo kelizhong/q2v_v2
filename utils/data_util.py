@@ -1,21 +1,15 @@
 # coding=utf-8
 """util for data processing"""
-import os
 import sys
 import re
 import codecs
 import string
-import random
+import logbook as logging
 from nltk import word_tokenize
 from nltk.stem import WordNetLemmatizer
-from utils.pickle_util import save_obj_pickle
-from utils.cache_util import RandomSet
 from enum import Enum, unique
-from collections import Counter
 import numpy as np
-from itertools import chain
 from config.config import end_token
-from itertools import combinations
 
 wn_lemmatizer = WordNetLemmatizer()
 
@@ -46,19 +40,6 @@ def sentence_gen(files):
                     yield line
 
 
-def aksis_sentence_gen(filename):
-    """Generator that yield each sentence in aksis corpus.
-    Parameters
-    ----------
-        filename: str
-            data file name
-    """
-    for line in sentence_gen(filename):
-        line = extract_query_title_from_aksis_data(line)
-        if len(line):
-            yield line
-
-
 def stem_tokens(tokens, lemmatizer):
     """lemmatizer
     Parameters
@@ -78,101 +59,6 @@ def tokenize(text, lemmatizer=wn_lemmatizer):
     tokens = [i for i in tokens if i not in string.punctuation]
     stems = stem_tokens(tokens, lemmatizer)
     return stems
-
-
-def extract_query_title_from_aksis_data(sentence):
-    """extract the query and title from aksis raw data, this function is for building up vocabulary
-    Aksis data format: MarketplaceId\tAsin\tKeyword\t Score\tActionType\tDate
-    ActioType: 1-KeywordsByAdds, 2-KeywordsBySearches, 3-KeywordsByPurchases, 4-KeywordsByClicks
-    """
-    sentence = sentence.strip().lower()
-    items = re.split(r'\t+', sentence)
-    if len(items) == 7 and len(items[2]) and len(items[6]):
-        return items[2] + " " + items[6]
-    else:
-        return str()
-
-
-def extract_raw_query_title_score_from_aksis_data(sentence):
-    """extract the query, title and score from aksis raw data, this function is to generate training data
-    score gives a rough idea about specificness of a query. For example query1: "iphone" and query2: "iphone 6s 64GB".
-    In both the query customer is looking for iphone but query2 is more specific.
-    Query specificity score is number which ranges from 0.0 to 1.0.
-    Aksis data format: MarketplaceId\tAsin\tKeyword\t Score\tActionType\tDate
-    ActioType: 1-KeywordsByAdds, 2-KeywordsBySearches, 3-KeywordsByPurchases, 4-KeywordsByClicks
-    """
-    sentence = sentence.strip().lower()
-    items = re.split(r'\t+', sentence)
-    if len(items) == 7 and len(items[2]) and len(items[3]) and len(items[6]):
-        return items[2], items[6], items[3]
-    else:
-        return None, None, None
-
-
-def query_title_score_generator_from_aksis_data(files, dropout=-1):
-    """Generator that yield query, title, score in aksis corpus"""
-    for line in sentence_gen(files):
-        query, title, score = extract_raw_query_title_score_from_aksis_data(line)
-        if query and title and score:
-            if not is_hit(score, dropout):
-                continue
-            yield query, title
-
-
-def query_pair_generator_from_aksis_data(files, nouse=-1):
-    for sentence in sentence_gen(files):
-        sentence = sentence.strip().lower()
-        sentence = re.sub(r'(?:^\(|\)$)', '', sentence)
-        items = re.split(r'\t+', sentence)
-        if len(items) > 2:
-            items = items[1:]
-        yield items
-
-
-def negative_sampling_query_pair_data_generator(files, neg_number, dropout=-1):
-    capacity = 65535
-    rs = RandomSet(capacity)
-    query_pair_set = RandomSet()
-    for items in query_pair_generator_from_aksis_data(files, dropout):
-        current_query_pair_set = set()
-        item_length = 0
-        for item in combinations(items, 2):
-            if len(item[0].split()) < 2 or len(item[1].split()) < 2 or item[0] in item[1] or item[1] in item[0]:
-                continue
-
-            current_query_pair_set.add(item[0])
-            current_query_pair_set.add(item[1])
-            query_pair_set.add((item[0], item[1], aksis_data_label.positive_label.value))
-            item_length += 1
-            for neg_query in rs.get_n_items(neg_number):
-                query = item[0]
-                if query != neg_query and query not in neg_query and neg_query not in query:
-                    query_pair_set.add((query, neg_query, aksis_data_label.negative_label.value))
-                    item_length += 1
-        # rs.update(current_query_pair_set)
-        if len(current_query_pair_set) > 1:
-            rs.add(random.sample(current_query_pair_set, 1)[0])
-
-        if len(query_pair_set) > capacity:
-            for ele in query_pair_set.get_n_items(item_length):
-                query_pair_set.remove(ele)
-                yield ele
-
-
-def negative_sampling_train_data_generator(files, neg_number, dropout=-1):
-    capacity = 65535
-    rs = RandomSet(capacity)
-    for query, title in query_title_score_generator_from_aksis_data(files, dropout):
-        yield query, title, aksis_data_label.positive_label.value
-        for neg_title in rs.get_n_items(neg_number):
-            yield query, neg_title, aksis_data_label.negative_label.value
-        rs.add(title)
-
-
-def is_hit(score, dropout):
-    """sample function to decide whether the data should be trained,
-    not sample if dropout less than 0"""
-    return dropout < 0 or float(score) > random.uniform(dropout, 1)
 
 
 def clean_html(html):
@@ -217,125 +103,8 @@ def basic_tokenizer(sentence):
     return [w for w in words if w]
 
 
-def build_words_frequency_counter(vocabulary_data_dir, data_path, tokenizer=None):
-    """
-    Create vocabulary file (if it does not exist yet) from data file.
-    Data file should have one sentence per line.
-    Each sentence will be tokenized.
-    Vocabulary contains the most-frequent tokens up to max_vocabulary_size.
-    We write it to vocabulary_path in a one-token-per-line format, so that later
-    token in the first line gets id=0, second line gets id=1, and so on.
-    Args:
-      vocabulary_path: path where the vocabulary will be created.
-      data_path: data file that will be used to create vocabulary.
-      max_vocabulary_size: limit on the size of the created vocabulary.
-    """
-    words_freq_counter_path = os.path.join(vocabulary_data_dir, "words_freq_counter")
-    if not os.path.isfile(words_freq_counter_path):
-        print("Building words frequency counter %s from data %s" % (words_freq_counter_path, data_path))
-
-        def _word_generator():
-            with open(data_path, 'r+') as f:
-                for num, line in enumerate(f):
-                    if num % 100000 == 0:
-                        print("  processing line %d" % counter)
-                    try:
-                        tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
-                    except Exception as e:
-                        print("Tokenize failure: " + line)
-                        continue
-                    for word in tokens:
-                        yield word
-
-        counter = Counter(_word_generator())
-        save_obj_pickle(counter, words_freq_counter_path, True)
-        print('Vocabulary file created')
-
-
-def pad_sequences(sequences, maxlen=None, dtype='int32',
-                  padding='pre', truncating='pre', value=0.):
-    """Pads each sequence to the same length (length of the longest sequence).
-    If maxlen is provided, any sequence longer
-    than maxlen is truncated to maxlen.
-    Truncation happens off either the beginning (default) or
-    the end of the sequence.
-    Supports post-padding and pre-padding (default).
-    # Arguments
-        sequences: list of lists where each element is a sequence
-        maxlen: int, maximum length
-        dtype: type to cast the resulting sequence.
-        padding: 'pre' or 'post', pad either before or after each sequence.
-        truncating: 'pre' or 'post', remove values from sequences larger than
-            maxlen either in the beginning or in the end of the sequence
-        value: float, value to pad the sequences to the desired value.
-    # Returns
-        x: numpy array with dimensions (number_of_sequences, maxlen)
-    # Raises
-        ValueError: in case of invalid values for `truncating` or `padding`,
-            or in case of invalid shape for a `sequences` entry.
-    """
-    if not hasattr(sequences, '__len__'):
-        raise ValueError('`sequences` must be iterable.')
-    lengths = []
-    for x in sequences:
-        if not hasattr(x, '__len__'):
-            raise ValueError('`sequences` must be a list of iterables. '
-                             'Found non-iterable: ' + str(x))
-        lengths.append(len(x))
-
-    num_samples = len(sequences)
-    if maxlen is None:
-        maxlen = np.max(lengths)
-
-    # take the sample shape from the first non empty sequence
-    # checking for consistency in the main loop below.
-    sample_shape = tuple()
-    for s in sequences:
-        if len(s) > 0:
-            sample_shape = np.asarray(s).shape[1:]
-            break
-
-    x = (np.ones((num_samples, maxlen) + sample_shape) * value).astype(dtype)
-    for idx, s in enumerate(sequences):
-        if not len(s):
-            continue  # empty list/array was found
-        if truncating == 'pre':
-            trunc = s[-maxlen:]
-        elif truncating == 'post':
-            trunc = s[:maxlen]
-        else:
-            raise ValueError('Truncating type "%s" not understood' % truncating)
-
-        # check `trunc` has expected shape
-        trunc = np.asarray(trunc, dtype=dtype)
-        if trunc.shape[1:] != sample_shape:
-            raise ValueError('Shape of sample %s of sequence at position %s is different from expected shape %s' %
-                             (trunc.shape[1:], idx, sample_shape))
-
-        if padding == 'post':
-            x[idx, :len(trunc)] = trunc
-        elif padding == 'pre':
-            x[idx, -len(trunc):] = trunc
-        else:
-            raise ValueError('Padding type "%s" not understood' % padding)
-    return x
-
-
 def find_ngrams(input_list, n):
     return zip(*[input_list[i:] for i in range(n)])
-
-
-def trigram_encoding(data, trigram_dict, return_data=True):
-    if data is None or len(data.strip()) == 0:
-        data_triagrams_index = list()
-        data = None
-    else:
-        refined_data = re.sub('[^a-z0-9.&\\ ]+', '', data.strip().lower())
-        data_seq = refined_data.split()
-        data_triagrams = list(chain(*[find_ngrams("#" + qw + "#", 3) for qw in data_seq]))
-        data_triagrams_index = [trigram_dict[d] if d in trigram_dict else len(trigram_dict) + 1 for d in data_triagrams]
-    result = data_triagrams_index, data if return_data else data_triagrams_index
-    return result
 
 
 # batch preparation of a given sequence pair for training
@@ -389,3 +158,66 @@ def prepare_train_batch(seqs, maxlen=None, dtype='int32'):
     for idx, s_x in enumerate(seqs):
         x[idx, :lengths[idx]] = s_x
     return x, lengths
+
+
+# parse aksis query pair data
+
+def parse_aksis_query_data(line):
+    queries = [] if line is None else line.split("\t")
+    if len(queries) < 2:
+        return list()
+    tokens_list = list()
+    for query in queries[1:]:
+        tokens = tokenize(query)
+        tokens_list.extend(tokens)
+
+    return tokens_list
+
+
+def data_encoding(data, vocabulary, ngram=3, return_data=True):
+    data_index = list()
+    if data and len(data.strip()) > 0:
+        words = tokenize(data)
+        for word in words:
+            if word in vocabulary:
+                data_index.extend(words_index_lookup(word, vocabulary))
+            else:
+                words_list = ngram_tokenize_word(word, ngram)
+                data_index.extend(words_index_lookup(words_list, vocabulary))
+
+    result = data_index, data if return_data else data_index
+    print(data)
+    print(data_index)
+    return result
+
+
+def ngram_tokenize_word(word, ngram):
+    word = re.sub('[^a-z0-9#.\'-, ]+', '', word.strip().lower())
+    words_list = [''.join(ele) for ele in find_ngrams('#' + word + '#', ngram)]
+    return words_list
+
+
+def words_index_lookup(words_list, vocabulary):
+    if not isinstance(words_list, list):
+        words_list = [words_list]
+    words_index = [vocabulary[d] if d in vocabulary else len(vocabulary) + 1 for d in words_list]
+    return words_index
+
+
+def extract_siamese_data(line):
+    line = re.sub(r'(?:^\(|\)$)', '', line)
+    line = line.strip().lower()
+    items = re.split(r'\t+', line)
+    if len(items) == 3:
+        return items[0], items[1], items[2]
+    else:
+        return None, None, None
+
+
+def siamese_data_generator(files):
+    for sentence in sentence_gen(files):
+        try:
+            data = extract_siamese_data(sentence)
+            yield data
+        except Exception as e:
+            logging.error("Failed to extract siamese data {}, Error:{}", sentence, e)

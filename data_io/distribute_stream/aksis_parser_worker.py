@@ -7,12 +7,11 @@ import pickle
 # pylint: disable=ungrouped-imports
 import zmq
 from utils.decorator_util import memoized
-from vocabulary.vocab import VocabularyFromCustomStringTrigram
+from vocabulary.vocab import VocabularyFromWordList
 from zmq.eventloop import ioloop
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.decorators import socket
 from ..batch_data_handler import BatchDataTrigramHandler
-from config.config import special_words
 
 
 class AksisParserWorker(Process):
@@ -32,7 +31,8 @@ class AksisParserWorker(Process):
             Port for the outbound traffic
     """
 
-    def __init__(self, ip, vocabulary_data_dir, top_words, batch_size, source_maxlen=30, target_maxlen=100, frontend_port=5556, backend_port=5557,
+    def __init__(self, ip, vocabulary_data_dir, top_words, batch_size, words_list_file=None, source_maxlen=30,
+                 target_maxlen=100, frontend_port=5556, backend_port=5557,
                  name="AksisWorkerProcess"):
         Process.__init__(self)
         # pylint: disable=invalid-name
@@ -45,6 +45,7 @@ class AksisParserWorker(Process):
         self.batch_size = batch_size
         self.source_maxlen = source_maxlen
         self.target_maxlen = target_maxlen
+        self.words_list_file = words_list_file
         self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size)
 
     # pylint: disable=no-member
@@ -67,6 +68,7 @@ class AksisParserWorker(Process):
                     sender.send_pyobj(self.batch_data.data_object)
             except Exception as e:
                 logging.info("{} failed to load msg. Error: {}", self.name, e)
+
         pull_stream.on_recv(_on_recv)
         loop.start()
 
@@ -74,7 +76,6 @@ class AksisParserWorker(Process):
     @memoized
     def vocabulary(self):
         """load vocabulary"""
-        logging.info("loading vocabulary for process {}", self.name)
-        vocab = VocabularyFromCustomStringTrigram(self.vocabulary_data_dir, special_words=special_words, top_words=self.top_words).build_vocabulary_from_pickle()
+        vocab = VocabularyFromWordList(self.vocabulary_data_dir,
+                                       top_words=self.top_words).build_vocabulary_from_words_list(self.words_list_file)
         return vocab
-

@@ -262,13 +262,13 @@ class Q2VModel(object):
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
-    def dot_product_loss(self):
+    def cos_loss(self):
         labels = tf.cast(self.labels, self.dtype)
-
-        distance = tf.reduce_sum(tf.multiply(self.src_last_output, self.tgt_last_output), axis=1)
-        tmp = tf.multiply(labels, tf.square(distance))
-        tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
-        return tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
+        # src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
+        # tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
+        distance = self.compute_euclidean_distance(self.src_last_output, self.tgt_last_output)
+        loss_mean = tf.reduce_mean(distance)
+        return loss_mean
 
     @staticmethod
     def compute_euclidean_distance(x, y):
@@ -287,47 +287,34 @@ class Q2VModel(object):
         distance = tf.losses.cosine_distance(x_normalize, y_normalize, dim=1)
         return distance
 
-    def contrastive_loss_distance(self):
-
-        labels = tf.cast(self.labels, self.dtype)
-        # Euclidean distance between x1,x2
-        distance = tf.sqrt(
-            tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
-
-        # distance = tf.div(distance,
-        #                  tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
-        #                         tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
-
-        distance = tf.reshape(distance, [-1], name="distance")
-
-        # tmp = y * tf.square(d)
-        # tmp = tf.multiply(labels, tf.square(distance))
-        # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
-        # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(self.compute_cosine_distance(self.src_last_output, self.tgt_last_output))))
-        loss_mean = tf.reduce_mean(loss)
-        return loss_mean
+    @staticmethod
+    def compute_manhattan_distance(x, y):
+        tf.subtract(x, y)
+        distance = tf.reduce_sum(tf.abs(tf.subtract(x, y)), reduction_indices=1)
+        return distance
 
     def contrastive_loss(self):
 
         labels = tf.cast(self.labels, self.dtype)
         margin = tf.constant(5.)
         # Euclidean distance between x1,x2
-        distance = tf.sqrt(
-            tf.reduce_sum(tf.square(tf.subtract(self.src_last_output, self.tgt_last_output)), 1, keep_dims=True))
+        distance = self.compute_euclidean_distance(self.src_last_output, self.tgt_last_output)
 
         # distance = tf.div(distance,
-        #                  tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
-        #                         tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
+        #                 tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
+        #                        tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
 
-        distance = tf.reshape(distance, [-1], name="distance")
-        # negative_loss = tf.nn.relu(margin - l2_loss_pairs)
+        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.nn.relu(margin - distance))))
+        loss_mean = tf.reduce_mean(loss)
+        return loss_mean
 
-        # tmp = y * tf.square(d)
-        # tmp = tf.multiply(labels, tf.square(distance))
-        # tmp2 = (1 - labels) * tf.square(tf.maximum((1 - distance), 0))
-        # tf.reduce_sum(tmp + tmp2) / self.batch_size / 2
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.maximum((margin - distance), 0))))
+    def l1_loss(self):
+        # Calculate L1 Distance
+        labels = tf.cast(self.labels, self.dtype)
+        distance = tf.reduce_sum(tf.abs(tf.add(self.src_last_output, tf.negative(self.tgt_last_output))), reduction_indices=1)
+        # loss = tf.nn.sigmoid(distance)
+        # MSE error
+        loss = tf.square(labels - tf.exp(tf.negative(distance)))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
@@ -335,9 +322,11 @@ class Q2VModel(object):
 
         with tf.name_scope("loss"):
             # self.loss = self.contrastive_loss_distance()
-            self.loss = self.contrastive_loss()
+            # self.loss = self.contrastive_loss()
             # self.loss = self.cos_similarity_loss()
             # self.loss = self.dot_product_loss()
+            # self.loss = self.cos_loss()
+            self.loss = self.l1_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, tgt_inputs, tgt_inputs_length, labels):
         """

@@ -7,10 +7,11 @@ from tqdm import tqdm
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
-from vocabulary.vocab import VocabularyFromCustomStringTrigram
+from vocabulary.vocab import VocabularyFromWordList
 from config.config import FLAGS
 from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
+from config.config import vocabulary_size
 
 
 class Inference(object):
@@ -102,15 +103,13 @@ class Inference(object):
     @memoized
     def vocabulary(self):
         """load vocabulary"""
-        vocab = VocabularyFromCustomStringTrigram(FLAGS.vocabulary_data_dir, top_words=64005).build_vocabulary_from_pickle()
+        vocab = VocabularyFromWordList(FLAGS.vocabulary_data_dir, top_words=vocabulary_size).build_vocabulary_from_words_list()
         return vocab
 
 
 def main(_):
-    i = Inference(batch_size=2)
-    i.visualize('source')
-    #  print(cos_distance(i.encode(["nike shoe men"]), i.encode("apple shoe men")))
-    print(i.encode(["nike shoe men"]))
+    i = Inference(batch_size=1024)
+    i.visualize('names')
 
 
 if __name__ == "__main__":

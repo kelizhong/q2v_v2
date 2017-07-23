@@ -33,11 +33,12 @@ from helper.model_helper import create_model
 from utils.decorator_util import memoized
 from utils.log_util import setup_logger
 from utils.data_util import prepare_train_pair_batch
+from collections import OrderedDict
 
 
 class Trainer(object):
     def __init__(self, job_name, ps_hosts, worker_hosts, task_index, gpu, model_dir, is_sync, raw_data_path, batch_size,
-                 display_freq, model_name='q2v',
+                 display_freq, config, model_name='q2v',
                  source_maxlen=None, target_maxlen=None, top_words=None, vocabulary_data_dir=None, port=None):
         self.job_name = job_name
         self.ps_hosts = ps_hosts.split(",") if ps_hosts else list()
@@ -54,6 +55,7 @@ class Trainer(object):
         self.top_words = top_words
         self.vocabulary_data_dir = vocabulary_data_dir
         self.port = port
+        self.words_list_path = config['words_list_path']
 
     @property
     @memoized
@@ -115,7 +117,7 @@ class Trainer(object):
     @property
     def data_local_stream(self):
         data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words,
-                                      batch_size=self.batch_size,
+                                      batch_size=self.batch_size, words_list_file=self.words_list_path,
                                       raw_data_path=self.raw_data_path).generate_batch_data()
         return data_stream
 
@@ -170,6 +172,7 @@ class Trainer(object):
                 words_done, sents_done = 0, 0
                 data_stream = self.data_stream
                 for step, (_, source_tokens, _, target_tokens, labels) in enumerate(data_stream):
+
                     start_time = time.time()
                     source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                     # Get a batch from training parallel data
@@ -209,6 +212,7 @@ def main(_):
         os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
+    config = OrderedDict(sorted(FLAGS.__flags.items()))
     trainer = Trainer(raw_data_path=FLAGS.raw_data_path,
                       vocabulary_data_dir=FLAGS.vocabulary_data_dir,
                       port=FLAGS.data_stream_port, top_words=FLAGS.max_vocabulary_size, source_maxlen=FLAGS.source_maxlen, target_maxlen=FLAGS.target_maxlen,
@@ -216,7 +220,7 @@ def main(_):
                       ps_hosts=FLAGS.ps_hosts, worker_hosts=FLAGS.worker_hosts, task_index=FLAGS.task_index,
                       gpu=FLAGS.gpu,
                       model_dir=FLAGS.model_dir, is_sync=FLAGS.is_sync, batch_size=FLAGS.batch_size,
-                      display_freq=FLAGS.display_freq)
+                      display_freq=FLAGS.display_freq, config=config)
     trainer.train()
 
 

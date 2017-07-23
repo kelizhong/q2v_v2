@@ -11,6 +11,7 @@ import argparse
 import signal
 from utils.log_util import Logger
 import logbook
+from config.config import project_dir, vocabulary_size
 
 
 def parse_args():
@@ -27,9 +28,13 @@ def parse_args():
     q2v_aksis_ventilator_parser.add_argument('data_dir', type=str,
                                               help='the file name of the encoder input for training')
     q2v_aksis_ventilator_parser.add_argument('--vocabulary-data-dir',
-                                              default=os.path.join(os.getcwd(), 'data', 'vocabulary'),
+                                              default=os.path.join(project_dir, 'data', 'vocabulary'),
                                               type=str,
                                               help='vocabulary with he most common words')
+    q2v_aksis_ventilator_parser.add_argument('--words-list-file',
+                                              default=os.path.join(project_dir, 'data', 'vocabulary', 'words_list'),
+                                              type=str,
+                                              help='words list to build vocabulary')
     q2v_aksis_ventilator_parser.add_argument('-ap', '--action-patterns', nargs=2, action=AppendTupleWithoutDefault,
                                               default=[('*add', -1), ('*search', 0.5), ('*click', 0.4),
                                                        ('*purchase', -1)])
@@ -37,10 +42,18 @@ def parse_args():
     q2v_aksis_ventilator_parser.add_argument('--port', type=str, help='zmq port')
     q2v_aksis_ventilator_parser.add_argument('-bs', '--batch-size', default=128, type=int,
                                               help='batch size for each databatch')
-    q2v_aksis_ventilator_parser.add_argument('--top-words', default=64005, type=int,
+    q2v_aksis_ventilator_parser.add_argument('--top-words', default=vocabulary_size, type=int,
                                               help='the max sample num for training')
     q2v_aksis_ventilator_parser.add_argument('--worker-num', default=1, type=int,
                                               help='number of parser worker')
+    q2v_aksis_ventilator_parser.add_argument('--rawdata-frontend-port', default=5555, type=int,
+                                              help='train rawdata frontend port')
+    q2v_aksis_ventilator_parser.add_argument('--rawdata-backend-port', default=5556, type=int,
+                                             help='train rawdata backend port')
+    q2v_aksis_ventilator_parser.add_argument('--collector-frontend-port', default=5557, type=int,
+                                             help='collector frontend port')
+    q2v_aksis_ventilator_parser.add_argument('--collector-backend-port', default=5558, type=int,
+                                             help='collector frontend port')
     return parser.parse_args()
 
 
@@ -62,5 +75,9 @@ if __name__ == "__main__":
         from data_io.distribute_stream.aksis_data_pipeline import AksisDataPipeline
 
         p = AksisDataPipeline(args.data_dir, args.vocabulary_data_dir, args.top_words, args.action_patterns,
-                              args.batch_size, worker_num=args.worker_num)
+                              args.batch_size, rawdata_frontend_port=args.rawdata_frontend_port,
+                              rawdata_backend_port=args.rawdata_backend_port,
+                              collector_fronted_port=args.collector_frontend_port,
+                              collector_backend_port=args.collector_backend_port,
+                              worker_num=args.worker_num, words_list_file=args.words_list_file)
         p.start_all()

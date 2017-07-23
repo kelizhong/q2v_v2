@@ -2,7 +2,7 @@
 import abc
 import six
 import logbook as logging
-from utils.data_util import trigram_encoding
+from utils.data_util import data_encoding
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -102,12 +102,12 @@ class BatchDataTrigramHandler(BatchDataHandler):
         _target_tokens, _target = None, None
         if self.enable_target:
             if target and len(target.split()) >= self.min_words:
-                _target_tokens, _target = trigram_encoding(target, self.vocabulary)
+                _target_tokens, _target = data_encoding(target, self.vocabulary)
             else:
                 return self.data_object
         if source and len(source.split()) >= self.min_words:
             # discard source with length less than `min_words`
-            _source_tokens, _source = trigram_encoding(source, self.vocabulary)
+            _source_tokens, _source = data_encoding(source, self.vocabulary)
             data_object = self.insert_data_object(_source, _source_tokens, _target, _target_tokens, label)
         else:
             data_object = self.data_object
