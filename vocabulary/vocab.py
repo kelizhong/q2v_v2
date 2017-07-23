@@ -60,7 +60,8 @@ class VocabularyBase(object):
             with codecs.open(words_list_file, encoding='utf-8', errors='ignore') as f:
                 for word in f:
                     word = word.strip().lower()
-                    vocab[word] = len(vocab)
+                    if word not in vocab:
+                        vocab[word] = len(vocab)
                     if len(vocab) > self.top_words:
                         break
             save_obj_pickle(vocab, self.vocab_path, True)
@@ -91,7 +92,7 @@ class VocabularyBase(object):
             for word, _ in words_freq_list:
                 if 0 < self.top_words <= len(vocab):
                     break
-                if word not in self.special_words:
+                if word not in vocab:
                     vocab[word] = len(vocab)
             save_obj_pickle(vocab, self.vocab_path, True)
         else:
