@@ -1,7 +1,7 @@
 # coding=utf-8
 import abc
 import six
-import logbook as logging
+import logging
 from utils.data_util import data_encoding
 
 
@@ -17,6 +17,7 @@ class BatchDataHandler(object):
     """
 
     def __init__(self, vocabulary, batch_size, enable_target):
+        self.logger = logging.getLogger("data")
         self.batch_size = batch_size
         self.vocabulary = vocabulary
         self.enable_target = enable_target
@@ -40,7 +41,7 @@ class BatchDataHandler(object):
                 self._target_tokens.append(target_tokens)
                 self._labels.append(label_id)
             else:
-                logging.error("BatchDataHandler insert object: allow target, but the target is None or length is 0")
+                self.logger.error("BatchDataHandler insert object: allow target, but the target is None or length is 0")
                 self.validate_data_object_size()
                 return self.data_object
         if source and len(source_tokens) > 0:

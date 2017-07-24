@@ -1,7 +1,7 @@
 # coding=utf-8
 # pylint: disable=no-member, invalid-name, ungrouped-imports, too-many-arguments
 """aksis data collector that collect the data from parser worker"""
-import logbook as logging
+import logging
 import pickle
 from multiprocessing import Process
 
@@ -36,6 +36,7 @@ class AksisDataCollector(Process):
     def __init__(self, ip, batch_size, frontend_port=5557, backend_port=5558,
                  metric_interval=60, name="AksisDataCollectorProcess"):
         Process.__init__(self)
+        self.logger = logging.getLogger("data")
         self.ip = ip
         self.batch_size = batch_size
         self.frontend_port = frontend_port
@@ -53,9 +54,8 @@ class AksisDataCollector(Process):
         # set up bucket queue
         metric = AppMetric(name=self.name, interval=self.metric_interval)
         # pylint: disable=line-too-long
-        logging.info("start collector {}, ip:{}, frontend port:{}, backend port:{}", self.name, self.ip,
-                     self.frontend_port,
-                     self.backend_port)
+        self.logger.info("start collector %s, ip:%s, frontend port:%d, backend port:%d", self.name, self.ip,
+                     self.frontend_port, self.backend_port)
         ioloop.install()
         loop = ioloop.IOLoop.instance()
         pull_stream = ZMQStream(receiver, loop)
@@ -65,13 +65,13 @@ class AksisDataCollector(Process):
             # encoder_sentence_id for query in aksis data
             # decoder_sentence_id for title in aksis data
             try:
-                source_tokens, source_lens, target_tokens, target_lens, label_id = pickle.loads(msg[0])
+                sources, source_tokens, targets, target_tokens, label_id = pickle.loads(msg[0])
                 # add the data from parser worker, and get data from the batch queue
                 if len(source_tokens) == self.batch_size:
-                    sender.send_pyobj((source_tokens, source_lens, target_tokens, target_lens, label_id))
+                    sender.send_pyobj((sources, source_tokens, targets, target_tokens, label_id))
                     metric.notify(self.batch_size)
             except Exception as e:
-                logging.info("{} failed to load msg. Error: {}", self.name, e)
+                self.logger.error("%s failed to load msg.", self.name, exc_info=True, stack_info=True)
 
         pull_stream.on_recv(_on_recv)
 

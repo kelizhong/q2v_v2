@@ -4,7 +4,7 @@ import sys
 import re
 import codecs
 import string
-import logbook as logging
+import logging
 from nltk import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from enum import Enum, unique
@@ -219,4 +219,4 @@ def siamese_data_generator(files):
             data = extract_siamese_data(sentence)
             yield data
         except Exception as e:
-            logging.error("Failed to extract siamese data {}, Error:{}", sentence, e)
+            logging.error("Failed to extract siamese data %s", sentence, exc_info=True, stack_info=True)

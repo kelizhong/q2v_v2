@@ -1,0 +1,60 @@
+---
+version: 1
+disable_existing_loggers: False
+formatters:
+    simple:
+        format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+handlers:
+    console:
+        class: logging.StreamHandler
+        level: DEBUG
+        formatter: simple
+        stream: ext://sys.stdout
+
+    info_file_handler:
+        class: logging.handlers.RotatingFileHandler
+        level: INFO
+        formatter: simple
+        filename: logs/info.log
+        maxBytes: 10485760 # 10MB
+        backupCount: 20
+        encoding: utf8
+
+    error_file_handler:
+        class: logging.handlers.RotatingFileHandler
+        level: ERROR
+        formatter: simple
+        filename: logs/errors.log
+        maxBytes: 10485760 # 10MB
+        backupCount: 20
+        encoding: utf8
+
+    model_concurrent_file_handler:
+        class: cloghandler.ConcurrentRotatingFileHandler
+        level: INFO
+        formatter: simple
+        filename: logs/model.log
+        maxBytes: 10485760 # 10MB
+        backupCount: 50
+        encoding: utf8
+
+    data_concurrent_file_handler:
+        class: cloghandler.ConcurrentRotatingFileHandler
+        level: INFO
+        formatter: simple
+        filename: logs/data.log
+        maxBytes: 10485760 # 10MB
+        backupCount: 50
+        encoding: utf8
+
+loggers:
+    model:
+        level: INFO
+        handlers: [console, model_concurrent_file_handler]
+        propagate: no
+        qualname: model
+
+root:
+    level: INFO
+    handlers: [console, info_file_handler, error_file_handler]

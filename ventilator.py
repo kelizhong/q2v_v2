@@ -9,9 +9,9 @@ from argparser.customArgType import FileType
 from argparser.customArgAction import AppendTupleWithoutDefault
 import argparse
 import signal
-from utils.log_util import Logger
-import logbook
-from config.config import project_dir, vocabulary_size
+import logging.config
+import yaml
+from config.config import project_dir, vocabulary_size, logging_config_path
 
 
 def parse_args():
@@ -58,18 +58,19 @@ def parse_args():
 
 
 def signal_handler(signal, frame):
-    logbook.warn('Stop!!!')
+    logger.warning('Stop!!!', exc_info=True, stack_info=True)
     sys.exit(0)
 
 
 def setup_logger():
-    log = Logger()
-    log.set_stream_handler()
-    log.set_time_rotating_file_handler(args.log_file_name)
+    with open(logging_config_path) as f:
+        dictcfg = yaml.load(f)
+        logging.config.dictConfig(dictcfg)
 
 if __name__ == "__main__":
     args = parse_args()
     setup_logger()
+    logger = logging.getLogger("data")
     signal.signal(signal.SIGINT, signal_handler)
     if args.action == 'q2v_aksis_ventilator':
         from data_io.distribute_stream.aksis_data_pipeline import AksisDataPipeline

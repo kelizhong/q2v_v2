@@ -4,6 +4,7 @@ from ..batch_data_handler import BatchDataTrigramHandler
 from utils.decorator_util import memoized
 from config.config import special_words
 
+
 class AksisDataStream(object):
     def __init__(self, vocabulary_data_dir, top_words, batch_size, raw_data_path=None, words_list_file=None):
         self.batch_size = batch_size

@@ -20,42 +20,41 @@ from __future__ import print_function
 
 import time
 
-import logbook as logging
+import logging.config
 import tensorflow as tf
 import os
 import numpy as np
 import math
+import yaml
 from collections import defaultdict
-from config.config import FLAGS
+from config.config import FLAGS, logging_config_path
 from data_io.distribute_stream.aksis_data_receiver import AksisDataReceiver
 from data_io.single_stream.aksis_data_stream import AksisDataStream
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
-from utils.log_util import setup_logger
 from utils.data_util import prepare_train_pair_batch
 from collections import OrderedDict
 
 
 class Trainer(object):
-    def __init__(self, job_name, ps_hosts, worker_hosts, task_index, gpu, model_dir, is_sync, raw_data_path, batch_size,
-                 display_freq, config, model_name='q2v',
-                 source_maxlen=None, target_maxlen=None, top_words=None, vocabulary_data_dir=None, port=None):
-        self.job_name = job_name
-        self.ps_hosts = ps_hosts.split(",") if ps_hosts else list()
-        self.worker_hosts = worker_hosts.split(",") if worker_hosts else list()
-        self.task_index = task_index
-        self.gpu = gpu
-        self.model_dir = os.path.join(model_dir, model_name)
-        self.is_sync = is_sync
-        self.raw_data_path = raw_data_path
-        self.display_freq = display_freq
-        self.batch_size = batch_size
-        self.source_maxlen = source_maxlen
-        self.target_maxlen = target_maxlen
-        self.top_words = top_words
-        self.vocabulary_data_dir = vocabulary_data_dir
-        self.port = port
+    def __init__(self, config):
+        self.job_name = config.get('job_name')
+        self.ps_hosts = config.get('ps_hosts', '').split(",")
+        self.worker_hosts = config.get('worker_hosts').split(",")
+        self.task_index = config.get('task_index')
+        self.gpu = config.get('gpu')
+        self.model_dir = os.path.join(config.get('model_dir'), config.get('model_name'))
+        self.is_sync = config.get('is_sync')
+        self.raw_data_path = config.get('raw_data_path')
+        self.display_freq = config.get('display_freq')
+        self.batch_size = config.get('batch_size')
+        self.source_maxlen = config.get('source_maxlen')
+        self.target_maxlen = config.get('target_maxlen')
+        self.max_vocabulary_size = config.get('max_vocabulary_size')
+        self.vocabulary_data_dir = config.get('vocabulary_data_dir')
+        self.data_stream_port = config.get('data_stream_port')
         self.words_list_path = config['words_list_path']
+        self.logger = logging.getLogger("model")
 
     @property
     @memoized
@@ -109,21 +108,21 @@ class Trainer(object):
 
     @property
     def data_zmq_stream(self):
-        if self.port is None:
+        if self.data_stream_port is None:
             raise Exception("port is not defined for zmq stream")
-        data_stream = AksisDataReceiver(port=self.port)
+        data_stream = AksisDataReceiver(port=self.data_stream_port)
         return data_stream
 
     @property
     def data_local_stream(self):
-        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.top_words,
+        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.max_vocabulary_size,
                                       batch_size=self.batch_size, words_list_file=self.words_list_path,
                                       raw_data_path=self.raw_data_path).generate_batch_data()
         return data_stream
 
     @property
     def data_stream(self):
-        if self.port:
+        if self.data_stream_port:
             stream = self.data_zmq_stream
         else:
             stream = self.data_local_stream
@@ -132,12 +131,12 @@ class Trainer(object):
     def _log_variable_info(self):
         tensor_memory = defaultdict(int)
         for item in tf.global_variables():
-            logging.info("variable:{}, device:{}", item.name, item.device)
+            self.logger.info("variable:%s, device:%s", item.name, item.device)
         # TODO int32 and float32, dtype?
         for item in tf.trainable_variables():
             tensor_memory[item.device] += int(np.prod(item.shape))
         for key, value in tensor_memory.items():
-            logging.info("device:{}, memory.:{}", key, value)
+            self.logger.info("device: %s, memory:%s", key, value)
 
     def train(self):
         if self.job_name == "ps":
@@ -177,7 +176,8 @@ class Trainer(object):
                     source_tokens, source_lens, target_tokens, target_lens = prepare_train_pair_batch(source_tokens, target_tokens, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                     # Get a batch from training parallel data
                     if source_tokens is None or target_tokens is None or len(source_tokens) == 0 or len(target_tokens) == 0:
-                        logging.warn('No samples under source_max_seq_length {} or target_max_seq_length {}', self.source_maxlen, self.target_maxlen)
+                        self.logger.warning('No samples under source_max_seq_length %d or target_max_seq_length %d',
+                                     self.source_maxlen, self.target_maxlen)
                         continue
 
                     # Execute a single training step
@@ -195,7 +195,7 @@ class Trainer(object):
                         avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
                         words_per_sec = words_done / time_elapsed
                         sents_per_sec = sents_done / time_elapsed
-                        logging.info(
+                        self.logger.info(
                             "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
                             (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, avg_loss, avg_perplexity,
                              sents_per_sec, words_per_sec))
@@ -205,22 +205,21 @@ class Trainer(object):
             sv.stop()
 
 
+def setup_logger():
+    with open(logging_config_path) as f:
+        dictcfg = yaml.load(f)
+        logging.config.dictConfig(dictcfg)
+
+
 def main(_):
-    setup_logger(FLAGS.log_file_name)
+    setup_logger()
     if FLAGS.debug:
         # https://github.com/tensorflow/tensorflow/commit/ec1403e7dc2b919531e527d36d28659f60621c9e
         os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
     config = OrderedDict(sorted(FLAGS.__flags.items()))
-    trainer = Trainer(raw_data_path=FLAGS.raw_data_path,
-                      vocabulary_data_dir=FLAGS.vocabulary_data_dir,
-                      port=FLAGS.data_stream_port, top_words=FLAGS.max_vocabulary_size, source_maxlen=FLAGS.source_maxlen, target_maxlen=FLAGS.target_maxlen,
-                      job_name=FLAGS.job_name,
-                      ps_hosts=FLAGS.ps_hosts, worker_hosts=FLAGS.worker_hosts, task_index=FLAGS.task_index,
-                      gpu=FLAGS.gpu,
-                      model_dir=FLAGS.model_dir, is_sync=FLAGS.is_sync, batch_size=FLAGS.batch_size,
-                      display_freq=FLAGS.display_freq, config=config)
+    trainer = Trainer(config=config)
     trainer.train()
 
 

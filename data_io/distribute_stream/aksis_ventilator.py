@@ -3,7 +3,7 @@
 """ventilator that read/produce the corpus data"""
 from multiprocessing import Process
 import glob
-import logbook as logging
+import logging
 import zmq
 from zmq.decorators import socket
 from utils.appmetric_util import AppMetric
@@ -46,13 +46,13 @@ class AksisDataVentilatorProcess(Process):
         self.metric_interval = metric_interval
         self.neg_number = neg_number
         self.name = name
+        self.logger = logging.getLogger("data")
 
     # pylint: disable=arguments-differ, no-member
     @socket(zmq.PUSH)
     def run(self, sender):
         sender.connect("tcp://{}:{}".format(self.ip, self.port))
-        logging.info("process {} connect {}:{} and start produce data",
-                     self.name, self.ip, self.port)
+        self.logger.info("process %s connect %s:%d and start produce data", self.name, self.ip, self.port)
         metric = AppMetric(name=self.name, interval=self.metric_interval)
         try:
             data_stream = self.get_data_stream()
@@ -63,7 +63,7 @@ class AksisDataVentilatorProcess(Process):
                 sender.send_pyobj(data)
                 metric.notify(1)
             data_stream = self.get_data_stream()
-            logging.info("process {} finish {} epoch", self.name, i)
+            self.logger.info("process %s finish %d epoch", self.name, i)
 
     def get_data_stream(self):
         """data stream generate the query, title data"""

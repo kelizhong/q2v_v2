@@ -1,7 +1,7 @@
 # coding=utf-8
 """Generate vocabulary"""
 import os
-import logbook as logging
+import logging
 import sys
 import codecs
 from itertools import product
@@ -48,7 +48,7 @@ class VocabularyBase(object):
             vocab = load_pickle_object(self.vocab_path)
             return len(vocab)
         else:
-            logging.warn("Vocabulary {} has not been built", self.vocab_path)
+            logging.warning("Vocabulary %s has not been built", self.vocab_path)
             return 0
 
     def build_vocabulary_from_words_list(self, words_list_file=None):
@@ -153,7 +153,7 @@ class VocabularyFromLocalFile(VocabularyBase):
             self.build_words_frequency_counter(raw_data_path)
         logging.info("Loading vocabulary")
         vocab = super(VocabularyFromLocalFile, self).build_vocabulary_from_pickle()
-        logging.info("Vocabulary size: %d" % len(vocab))
+        logging.info("Vocabulary size: %d", len(vocab))
         return vocab
 
 
@@ -219,17 +219,17 @@ class VocabFromZMQ(VocabularyBase):
         c = CollectorProcess(self.ip, self.collector_port)
         counter = Counter(c.collect())
         self._terminate_process(process_pool)
-        logging.info("Finish counting. {} unique words, a total of {} words in all files."
+        logging.info("Finish counting. %d unique words, a total of %d words in all files."
                      , len(counter), sum(counter.values()))
 
-        logging.info("store vocabulary with most_common_words file, vocabulary size: {}", len(counter))
+        logging.info("store vocabulary with most_common_words file, vocabulary size: %d", len(counter))
         save_obj_pickle(counter, self.words_freq_counter_path, self.overwrite)
         return self
 
     def _terminate_process(self, pool):
         for p in pool:
             p.terminate()
-            logging.info('terminated process {}', p.name)
+            logging.info('terminated process %s', p.name)
 
 
 class VocabularyFromCustomStringTrigram(VocabularyBase):

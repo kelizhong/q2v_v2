@@ -1,6 +1,6 @@
 # coding=utf-8
 """collect the tokenized sentence from worker"""
-import logbook as logging
+import logging
 import zmq
 from utils.appmetric_util import with_meter
 from utils.retry_util import retry

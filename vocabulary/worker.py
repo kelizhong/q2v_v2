@@ -1,6 +1,6 @@
 # coding=utf-8
 """Worker process which receiver the sentence from ventilator process and tokenize it"""
-import logbook as logging
+import logging
 from multiprocessing import Process
 import zmq
 from zmq.decorators import socket

@@ -2,7 +2,7 @@
 # pylint: disable=too-many-arguments, arguments-differ
 """worker to parse the raw data from ventilator"""
 from multiprocessing import Process
-import logbook as logging
+import logging
 import pickle
 # pylint: disable=ungrouped-imports
 import zmq
@@ -32,10 +32,10 @@ class AksisParserWorker(Process):
             Port for the outbound traffic
     """
 
-    def __init__(self, ip, vocabulary_data_dir, top_words, batch_size, words_list_file=None, source_maxlen=30,
-                 target_maxlen=100, frontend_port=5556, backend_port=5557, first_worker=0,
+    def __init__(self, ip, vocabulary_data_dir, top_words, batch_size, words_list_file=None, frontend_port=5556, backend_port=5557, first_worker=0,
                  name="AksisWorkerProcess"):
         Process.__init__(self)
+        self.logger = logging.getLogger("data")
         # pylint: disable=invalid-name
         self.ip = ip
         self.vocabulary_data_dir = vocabulary_data_dir
@@ -44,8 +44,6 @@ class AksisParserWorker(Process):
         self.backend_port = backend_port
         self.name = name
         self.batch_size = batch_size
-        self.source_maxlen = source_maxlen
-        self.target_maxlen = target_maxlen
         self.words_list_file = words_list_file if first_worker else None
         self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size)
 
@@ -55,8 +53,7 @@ class AksisParserWorker(Process):
     def run(self, receiver, sender):
         receiver.connect("tcp://{}:{}".format(self.ip, self.frontend_port))
         sender.connect("tcp://{}:{}".format(self.ip, self.backend_port))
-        logging.info("process {} connect {}:{} and start parse data", self.name, self.ip,
-                     self.frontend_port)
+        self.logger.info("process %s connect %s:%d and start parse data", self.name, self.ip, self.frontend_port)
         ioloop.install()
         loop = ioloop.IOLoop.instance()
         pull_stream = ZMQStream(receiver, loop)
@@ -68,7 +65,7 @@ class AksisParserWorker(Process):
                 if self.batch_data.data_object_length == self.batch_size:
                     sender.send_pyobj(self.batch_data.data_object)
             except Exception as e:
-                logging.info("{} failed to load msg. Error: {}", self.name, e)
+                self.logger.error("%s failed to load msg.", self.name, exc_info=True, stack_info=True)
 
         pull_stream.on_recv(_on_recv)
         loop.start()

@@ -6,7 +6,7 @@ from tensorflow.python.ops.rnn_cell import LSTMCell, LSTMStateTuple
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
 
-import logbook as logging
+import logging
 from external.cocob_optimizer import COCOB
 
 
@@ -16,6 +16,7 @@ class Q2VModel(object):
         assert mode.lower() in ['train', 'decode', 'encode']
 
         self.config = config
+        self.logger = logging.getLogger("model")
         self.mode = mode.lower()
 
         self.job_name = config['job_name']
@@ -58,7 +59,7 @@ class Q2VModel(object):
         self.saver = tf.train.Saver(tf.global_variables())
 
     def build_model(self):
-        logging.info("building model..")
+        self.logger.info("building model..")
         self.init_placeholders()
         self._init_embedding_layer()
         self.build_source_encoder()
@@ -131,7 +132,7 @@ class Q2VModel(object):
                                               initializer=tf.random_uniform_initializer(-1.0, 1.0), dtype=self.dtype)
 
     def build_source_encoder(self):
-        logging.info("building source encoder..")
+        self.logger.info("building source encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype) as scope:
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
@@ -149,7 +150,7 @@ class Q2VModel(object):
                 src_inputs_embedded = input_layer(src_inputs_embedded)
 
             if self.bidirectional:
-                logging.info("building bidirectional encoder..")
+                self.logger.info("building bidirectional encoder..")
                 self.fw_encoder_cell = self.build_encoder_cell()
                 self.bw_encoder_cell = self.build_encoder_cell()
                 self.src_outputs, self.src_last_state = tf.nn.bidirectional_dynamic_rnn(
@@ -172,7 +173,7 @@ class Q2VModel(object):
                 self.src_outputs = tf.concat([self.src_outputs[0], self.src_outputs[1]], axis=2)
 
             else:
-                logging.info("building encoder..")
+                self.logger.info("building encoder..")
                 # Building encoder_cell
                 self.encoder_cell = self.build_encoder_cell()
                 # Encode input sequences into context vectors:
@@ -186,7 +187,7 @@ class Q2VModel(object):
             self.src_last_output = self.extract_last_output(self.src_outputs, self.src_inputs_length-1)
 
     def build_target_encoder(self):
-        logging.info("building target encoder..")
+        self.logger.info("building target encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
@@ -203,7 +204,7 @@ class Q2VModel(object):
                 tgt_inputs_embedded = input_layer(tgt_inputs_embedded)
 
             if self.bidirectional:
-                logging.info("building bidirectional encoder..")
+                self.logger.info("building bidirectional encoder..")
                 self.tgt_outputs, self.tgt_last_state = tf.nn.bidirectional_dynamic_rnn(
                     cell_fw=self.fw_encoder_cell, cell_bw=self.bw_encoder_cell,
                     inputs=tgt_inputs_embedded,
@@ -224,7 +225,7 @@ class Q2VModel(object):
                 self.tgt_outputs = tf.concat([self.tgt_outputs[0], self.tgt_outputs[1]], axis=2)
 
             else:
-                logging.info("building encoder..")
+                self.logger.info("building encoder..")
                 # Building encoder_cell
                 # Encode input sequences into context vectors:
                 # encoder_outputs: [batch_size, max_time_step, cell_output_size]
@@ -387,7 +388,7 @@ class Q2VModel(object):
         """
         Builds graph to minimize loss function.
         """
-        logging.info("setting optimizer..")
+        self.logger.info("setting optimizer..")
         # Gradients and SGD update operation for training the model
         if self.optimizer.lower() == 'adadelta':
             self.opt = tf.train.AdadeltaOptimizer(learning_rate=self.learning_rate)

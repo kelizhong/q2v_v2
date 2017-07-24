@@ -3,12 +3,14 @@ import os
 import signal
 import sys
 
-import logbook as logging
+import logging
+import yaml
 
 from argparser.customArgType import FileType
 from config.config import project_dir
-from utils.data_util import aksis_sentence_gen
+from utils.data_util import sentence_gen
 from vocabulary.vocab import VocabFromZMQ, VocabularyFromCustomStringTrigram
+from config.config import logging_config_path
 
 
 def parse_args():
@@ -48,20 +50,18 @@ def signal_handler(signal, frame):
 
 
 def setup_logger():
-    from utils.log_util import Logger
-    log = Logger()
-    log.set_stream_handler()
-    log.set_time_rotating_file_handler(args.log_file_name)
+    with open(logging_config_path) as f:
+        dictcfg = yaml.load(f)
+        logging.config.dictConfig(dictcfg)
 
 
 if __name__ == "__main__":
     args = parse_args()
     setup_logger()
     signal.signal(signal.SIGINT, signal_handler)
-
     if args.files:
         VocabFromZMQ(vocabulary_data_dir=args.vocab_data_dir, workers_num=args.workers_num,
-                         sentence_gen=aksis_sentence_gen,
+                         sentence_gen=sentence_gen,
                          overwrite=args.overwrite).build_words_frequency_counter(args.files)
     else:
         VocabularyFromCustomStringTrigram(vocabulary_data_dir=args.vocab_data_dir).build_words_frequency_counter(args.string)

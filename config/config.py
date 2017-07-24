@@ -3,6 +3,7 @@ import os
 import tensorflow as tf
 
 project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir))
+logging_config_path = os.path.join(project_dir, 'config', 'logging.yaml')
 
 # Extra vocabulary symbols
 _GO = '_GO_'
@@ -43,6 +44,7 @@ tf.app.flags.DEFINE_string('optimizer', 'adam', 'Optimizer for training: (adadel
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("source_maxlen", 60, "max number of words in each source sequence.")
 tf.app.flags.DEFINE_integer("target_maxlen", 60, "max number of words in each target sequence.")
+tf.app.flags.DEFINE_string('model_name', 'q2v', 'File name used for model checkpoints')
 
 # For distributed
 # cluster specification

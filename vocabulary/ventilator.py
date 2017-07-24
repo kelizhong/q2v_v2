@@ -1,7 +1,7 @@
 # coding=utf-8
 """Ventilator process to read the data from sentence_gen generator"""
 from __future__ import print_function
-import logbook as logging
+import logging
 import glob
 from multiprocessing import Process
 from collections import Counter
@@ -42,9 +42,9 @@ class VentilatorProcess(Process):
         """read the sentence from sentence generator and send to the worker"""
         sender.bind("tcp://{}:{}".format(self.ip, self.port))
 
-        logging.info("start sentence producer {}", self.name)
+        logging.info("start sentence producer %s", self.name)
         for filename in self.corpus_files:
-            logging.info("Counting words in {}", filename)
+            logging.info("Counting words in %s", filename)
             for num, sentence in enumerate(self.sentence_gen(filename)):
                 if num % 10000 == 0:
                     print(num)
@@ -54,11 +54,11 @@ class VentilatorProcess(Process):
 if __name__ == '__main__':
     """for test"""
     files = glob.glob("/Users/keliz/Downloads/aksis.purchased.pair/part*")
-    v = VentilatorProcess(files, '127.0.0.1', '5555')
+    v = VentilatorProcess(files, '127.0.0.1', 5555)
     for _ in range(8):
-        w = WorkerProcess('127.0.0.1', '5555', '5556')
+        w = WorkerProcess('127.0.0.1', 5555, 5556)
         w.start()
-    c = CollectorProcess('127.0.0.1', '5556')
+    c = CollectorProcess('127.0.0.1', 5556)
     v.start()
     counter = Counter(c.collect())
     save_obj_pickle(counter, './counter.pkl', overwrite=True)
