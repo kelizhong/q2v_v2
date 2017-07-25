@@ -63,7 +63,7 @@ tf.app.flags.DEFINE_integer('decay_steps', 10000, 'how many steps to update the 
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.9, "Learning rate decays by this much.")
 
 # local data stream
-tf.app.flags.DEFINE_string("raw_data_path", os.path.join(project_dir, 'data/rawdata', 'query_2_2'), "port for data zmq stream")
+tf.app.flags.DEFINE_string("raw_data_path", os.path.join(project_dir, 'data/rawdata', 'query_sample_data'), "port for data zmq stream")
 tf.app.flags.DEFINE_integer("batch_size", 128,
                             "Batch size to use during training(positive pair count based).")
 tf.app.flags.DEFINE_string("vocabulary_data_dir", os.path.join(project_dir, 'data/vocabulary'), "port for data zmq stream")

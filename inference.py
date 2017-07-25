@@ -130,8 +130,6 @@ def main(_):
     # i.visualize('names')
     i.nearest("zone diet cookbook", '/Users/keliz/PycharmProjects/q2v_v4/data/rawdata/query_inference', 10)
 
-
-
 if __name__ == "__main__":
     tf.app.run()
 
