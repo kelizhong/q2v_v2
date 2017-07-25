@@ -16,8 +16,6 @@ class AksisDataPipeline(object):
 
     Parameters
     ----------
-        data_dir : str
-            Data_dir for the aksis corpus data
         vocabulary_path: str
             Path for vocabulary from aksis corpus data
         top_words: int
@@ -36,9 +34,9 @@ class AksisDataPipeline(object):
             The ip address string without the port to pass to ``Socket.bind()``.
         worker_num: int
             number of parser worker which tokenize the sentence and convert the sentence to id
-        raw_data_frontend_port: int
+        rawdata_frontend_port: int
             Port for the incoming traffic of ventilator which produce the raw data
-        raw_data_backend_port: int
+        rawdata_backend_port: int
             Port for the outbound traffic of ventilator which produce the raw data
         collector_fronted_port: int
             Port for the incoming traffic of collector which collect the data from worker
@@ -54,11 +52,10 @@ class AksisDataPipeline(object):
         Send the CTRL+C signal will stop all the processes
     """
 
-    def __init__(self, data_dir, vocabulary_path, top_words, file_patterns, batch_size,
+    def __init__(self, vocabulary_path, top_words, file_patterns, batch_size,
                  worker_num=1, ip=None, num_epoch=65535, words_list_file=None,
                  rawdata_frontend_port=5555, rawdata_backend_port=5556,
                  collector_fronted_port=5557, collector_backend_port=5558):
-        self.data_dir = data_dir
         self.vocabulary_path = vocabulary_path
         self.top_words = top_words
         self.ip = ip or local_ip()
@@ -97,7 +94,7 @@ class AksisDataPipeline(object):
     def start_data_ventilator_process(self):
         """start the ventilator process which read the corpus data"""
         for i, (file_pattern, dropout) in enumerate(self.file_patterns):
-            ventilator = AksisDataVentilatorProcess(file_pattern, self.data_dir, dropout=dropout,
+            ventilator = AksisDataVentilatorProcess(file_pattern, dropout=dropout,
                                                     ip=self.ip,
                                                     port=self.rawdata_frontend_port,
                                                     name="aksis_ventilator_{}".format(i))

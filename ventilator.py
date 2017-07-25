@@ -25,8 +25,6 @@ def parse_args():
     q2v_aksis_ventilator_parser = subparsers.add_parser("q2v_aksis_ventilator")
     q2v_aksis_ventilator_parser.set_defaults(action='q2v_aksis_ventilator')
 
-    q2v_aksis_ventilator_parser.add_argument('data_dir', type=str,
-                                              help='the file name of the encoder input for training')
     q2v_aksis_ventilator_parser.add_argument('--vocabulary-data-dir',
                                               default=os.path.join(project_dir, 'data', 'vocabulary'),
                                               type=str,
@@ -75,7 +73,7 @@ if __name__ == "__main__":
     if args.action == 'q2v_aksis_ventilator':
         from data_io.distribute_stream.aksis_data_pipeline import AksisDataPipeline
 
-        p = AksisDataPipeline(args.data_dir, args.vocabulary_data_dir, args.top_words, args.action_patterns,
+        p = AksisDataPipeline(args.vocabulary_data_dir, args.top_words, args.action_patterns,
                               args.batch_size, rawdata_frontend_port=args.rawdata_frontend_port,
                               rawdata_backend_port=args.rawdata_backend_port,
                               collector_fronted_port=args.collector_frontend_port,

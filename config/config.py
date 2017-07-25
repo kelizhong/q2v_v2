@@ -40,7 +40,7 @@ tf.app.flags.DEFINE_float('dropout_rate', 0.3, 'Dropout probability for input/ou
 tf.app.flags.DEFINE_boolean('use_dropout', False, 'Use dropout in each rnn cell')
 tf.app.flags.DEFINE_boolean('use_residual', False, 'Use residual connection between layers')
 tf.app.flags.DEFINE_integer('max_vocabulary_size', vocabulary_size, 'Source vocabulary size')
-tf.app.flags.DEFINE_string('optimizer', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)')
+tf.app.flags.DEFINE_string('optimizer', 'cocob', 'Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)')
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("source_maxlen", 60, "max number of words in each source sequence.")
 tf.app.flags.DEFINE_integer("target_maxlen", 60, "max number of words in each target sequence.")
@@ -57,18 +57,16 @@ tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
 tf.app.flags.DEFINE_boolean("is_sync", True, "whether to synchronize, aggregate gradients")
 
 # Training parameters
-tf.app.flags.DEFINE_float('learning_rate', 0.0002, 'Learning rate')
+tf.app.flags.DEFINE_float('learning_rate', 0.1, 'Learning rate')
 tf.app.flags.DEFINE_float('min_learning_rate', 0.0002, 'minimum Learning rate')
 tf.app.flags.DEFINE_integer('decay_steps', 1000, 'how many steps to update the learning rate.')
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.9, "Learning rate decays by this much.")
 
 # local data stream
-tf.app.flags.DEFINE_string("raw_data_path", os.path.join(project_dir, 'data/rawdata', 'person_name_labels'), "port for data zmq stream")
+tf.app.flags.DEFINE_string("raw_data_path", os.path.join(project_dir, 'data/rawdata', 'query_train'), "port for data zmq stream")
 tf.app.flags.DEFINE_integer("batch_size", 128,
                             "Batch size to use during training(positive pair count based).")
 tf.app.flags.DEFINE_string("vocabulary_data_dir", os.path.join(project_dir, 'data/vocabulary'), "port for data zmq stream")
 tf.app.flags.DEFINE_string("words_list_path", os.path.join(project_dir, 'data/vocabulary/words_list'), "custom words list to build vocabulary")
 
 FLAGS = tf.app.flags.FLAGS
-ps_hosts = FLAGS.ps_hosts.split(",")
-worker_hosts = FLAGS.worker_hosts.split(",")
