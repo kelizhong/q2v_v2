@@ -13,6 +13,7 @@ from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
 from config.config import vocabulary_size
 from config.config import special_words
+import heapq
 
 
 class Inference(object):
@@ -107,10 +108,28 @@ class Inference(object):
         vocab = VocabularyFromWordList(FLAGS.vocabulary_data_dir, top_words=vocabulary_size, special_words=special_words).build_vocabulary_from_words_list()
         return vocab
 
+    def nearest(self, item, file, n):
+        item_v = self.encode([item])[1][0]
+        sources = set(map(str.strip, open(file)))
+        h = []
+        with tqdm(total=len(sources)) as pbar:
+            for count, each in enumerate(zip(*[iter(sources)]*self.batch_size)):
+                batch_sources, result = self.encode(each)
+                for source, v in zip(batch_sources, result):
+                    similarity = cos_distance(item_v, v)
+                    if len(h) < n:
+                        heapq.heappush(h, (similarity, source))
+                    else:
+                        # Equivalent to a push, then a pop, but faster
+                        heapq.heappushpop(h, (similarity, source))
+        for i in h:
+            print(i)
 
 def main(_):
     i = Inference(batch_size=1024)
-    i.visualize('names')
+    # i.visualize('names')
+    i.nearest("zone diet cookbook", '/Users/keliz/PycharmProjects/q2v_v4/data/rawdata/query_inference', 10)
+
 
 
 if __name__ == "__main__":

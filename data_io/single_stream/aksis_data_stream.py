@@ -15,10 +15,10 @@ class AksisDataStream(object):
         self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size, min_words=-1)
 
     def generate_batch_data(self):
-        for num, (source, target, label) in enumerate(siamese_data_generator(self.raw_data_path)):
+        for num, (source, target_sample_items) in enumerate(siamese_data_generator(self.raw_data_path)):
             if num % 1000 == 0:
                 print("  reading data line %d" % num)
-            self.batch_data.parse_and_insert_data_object(source, target, label)
+            self.batch_data.parse_and_insert_data_object(source, target_sample_items, [0.5,0.5,0,0])
             if self.batch_data.data_object_length == self.batch_size:
                 yield self.batch_data.data_object
 

@@ -64,7 +64,34 @@ class Q2VModel(object):
         self._init_embedding_layer()
         self.build_source_encoder()
         if self.mode == 'train':
-            self.build_target_encoder()
+            samples_n = tf.shape(self.tgt_inputs_length)[1]
+            length_idx = tf.constant(0)
+            input_idx = tf.constant(0)
+            input_idx_shape = input_idx.get_shape()
+            tgt_outputs = tf.zeros_like(self.src_last_output, dtype=self.dtype)
+
+            def cond(i, l, m):
+                return tf.less(i, samples_n)
+
+            def body(_length_idx, _input_idx, _tgt_outputs):
+                tgt_length = tf.slice(self.tgt_inputs_length, [0, _length_idx], [-1, 1])
+                tgt_length = tf.squeeze(tgt_length)
+                max_tgt_length = tf.reduce_max(tgt_length)
+
+                tgt_input = tf.slice(self.tgt_inputs, [0, _input_idx], [-1, max_tgt_length])
+                tgt_output = self.build_target_encoder(tgt_input, tgt_length)
+                _tgt_outputs = tf.cond(tf.less(_length_idx, 1), lambda: tgt_output,
+                                       lambda: tf.concat([_tgt_outputs, tgt_output], 1))
+
+                _input_idx = tf.add(_input_idx, max_tgt_length)
+                _input_idx.set_shape(input_idx_shape)
+
+                return tf.add(_length_idx, 1), _input_idx, _tgt_outputs
+
+            _, _, tgt_outputs = tf.while_loop(cond, body, [length_idx, input_idx, tgt_outputs],
+                                              shape_invariants=[length_idx.get_shape(), input_idx.get_shape(),
+                                                                tf.TensorShape([None, None])])
+            self.tgt_outputs = tgt_outputs
             self.init_loss()
             self.init_optimizer()
 
@@ -102,9 +129,9 @@ class Q2VModel(object):
                 dtype=tf.int32, shape=(None, None), name='target_inputs')
             # decoder_inputs_length: [batch_size]
             self.tgt_inputs_length = tf.placeholder(
-                dtype=tf.int32, shape=(None,), name='target_inputs_length')
+                dtype=tf.int32, shape=(None, None), name='target_inputs_length')
 
-            self.labels = tf.placeholder(tf.int32, [None], name='labels')
+            self.labels = tf.placeholder(tf.float32, (None, None), name='labels')
 
     def build_single_cell(self):
         cell_type = LSTMCell
@@ -128,8 +155,9 @@ class Q2VModel(object):
     def _init_embedding_layer(self):
         # create word embedding vectors
         self.encoder_embeddings = tf.get_variable(name='embedding',
-                                              shape=[self.max_vocabulary_size, self.embedding_size],
-                                              initializer=tf.random_uniform_initializer(-1.0, 1.0), dtype=self.dtype)
+                                                  shape=[self.max_vocabulary_size, self.embedding_size],
+                                                  initializer=tf.random_uniform_initializer(-1.0, 1.0),
+                                                  dtype=self.dtype)
 
     def build_source_encoder(self):
         self.logger.info("building source encoder..")
@@ -184,15 +212,15 @@ class Q2VModel(object):
                     sequence_length=self.src_inputs_length, dtype=self.dtype,
                     time_major=False)
             # [batch_size, hidden unit]
-            self.src_last_output = self.extract_last_output(self.src_outputs, self.src_inputs_length-1)
+            self.src_last_output = self.extract_last_output(self.src_outputs, self.src_inputs_length - 1)
 
-    def build_target_encoder(self):
+    def build_target_encoder(self, tgt_inputs, tgt_inputs_length):
         self.logger.info("building target encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
             tgt_inputs_embedded = tf.nn.embedding_lookup(
-                params=self.encoder_embeddings, ids=self.tgt_inputs)
+                params=self.encoder_embeddings, ids=tgt_inputs)
             # tgt_inputs_embedded = self.dense_batch_relu(tgt_inputs_embedded, True, scope=scope)
 
             if self.use_residual:
@@ -205,24 +233,24 @@ class Q2VModel(object):
 
             if self.bidirectional:
                 self.logger.info("building bidirectional encoder..")
-                self.tgt_outputs, self.tgt_last_state = tf.nn.bidirectional_dynamic_rnn(
+                tgt_outputs, tgt_last_state = tf.nn.bidirectional_dynamic_rnn(
                     cell_fw=self.fw_encoder_cell, cell_bw=self.bw_encoder_cell,
                     inputs=tgt_inputs_embedded,
-                    sequence_length=self.tgt_inputs_length,
+                    sequence_length=tgt_inputs_length,
                     time_major=False,
                     dtype=self.dtype,
                     parallel_iterations=16,
                     scope=scope)
 
-                fw_state, bw_state = self.tgt_last_state
-                self.tgt_last_state = []
+                fw_state, bw_state = tgt_last_state
+                tgt_last_state = []
                 for f, b in zip(fw_state, bw_state):
                     if isinstance(f, LSTMStateTuple):
-                        self.tgt_last_state.append(
+                        tgt_last_state.append(
                             LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
                     else:
-                        self.tgt_last_state.append(tf.concat([f, b], 1))
-                self.tgt_outputs = tf.concat([self.tgt_outputs[0], self.tgt_outputs[1]], axis=2)
+                        tgt_last_state.append(tf.concat([f, b], 1))
+                tgt_outputs = tf.concat([tgt_outputs[0], tgt_outputs[1]], axis=2)
 
             else:
                 self.logger.info("building encoder..")
@@ -230,12 +258,13 @@ class Q2VModel(object):
                 # Encode input sequences into context vectors:
                 # encoder_outputs: [batch_size, max_time_step, cell_output_size]
                 # encoder_state: [batch_size, cell_output_size]
-                self.tgt_outputs, self.tgt_encoder_last_state = tf.nn.dynamic_rnn(
+                tgt_outputs, tgt_encoder_last_state = tf.nn.dynamic_rnn(
                     cell=self.encoder_cell, inputs=tgt_inputs_embedded,
-                    sequence_length=self.tgt_inputs_length, dtype=self.dtype,
+                    sequence_length=tgt_inputs_length, dtype=self.dtype,
                     time_major=False)
 
-            self.tgt_last_output = self.extract_last_output(self.tgt_outputs, self.tgt_inputs_length-1)
+            tgt_last_output = self.extract_last_output(tgt_outputs, tgt_inputs_length - 1)
+            return tgt_last_output
 
     @staticmethod
     def extract_last_output(output, ind):
@@ -257,7 +286,8 @@ class Q2VModel(object):
         src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
         tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
         distance = tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
-        loss = tf.add(tf.multiply(labels, tf.maximum(1 - distance, 0)), tf.multiply((1 - labels), tf.maximum(1 + distance, 0)))
+        loss = tf.add(tf.multiply(labels, tf.maximum(1 - distance, 0)),
+                      tf.multiply((1 - labels), tf.maximum(1 + distance, 0)))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
@@ -283,8 +313,9 @@ class Q2VModel(object):
     def compute_cosine_distance(x, y):
         x_normalize = tf.nn.l2_normalize(x, dim=1)
         y_normalize = tf.nn.l2_normalize(y, dim=1)
-        distance = tf.losses.cosine_distance(x_normalize, y_normalize, dim=1)
+        distance = tf.losses.cosine_distance(x_normalize, y_normalize, dim=1, reduction='none')
         return distance
+        # return tf.reduce_sum(tf.multiply(x_normalize, y), axis=1, keep_dims=True)
 
     @staticmethod
     def compute_manhattan_distance(x, y):
@@ -303,19 +334,36 @@ class Q2VModel(object):
         #                 tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
         #                        tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
 
-        loss = tf.add(tf.multiply(labels, tf.square(distance)), tf.multiply((1 - labels), tf.square(tf.nn.relu(margin - distance))))
+        loss = tf.add(tf.multiply(labels, tf.square(distance)),
+                      tf.multiply((1 - labels), tf.square(tf.nn.relu(margin - distance))))
         loss_mean = tf.reduce_mean(loss)
         return loss_mean
 
+    # dot product
+    @staticmethod
+    def mat_dot_product(x, y):
+        z = tf.reduce_sum(tf.multiply(x, y), 1, keep_dims=True)
+        return z
+
+    @staticmethod
+    def custom_mat_dot_product(A, B):
+        dim = tf.shape(A)[1]
+        ndim = tf.shape(B)[1]
+        batch_size = tf.shape(B)[0]
+        A = tf.tile(A, [1, tf.div(ndim, dim)])
+        A = tf.reshape(A, (-1, dim))
+        B = tf.reshape(B, (-1, dim))
+        C = tf.reduce_sum(tf.multiply(A, B), 1, keep_dims=True)
+        C = tf.reshape(C, (batch_size, -1))
+        return C
+
     def l1_loss(self):
-        # Calculate L1 Distance
-        labels = tf.cast(self.labels, self.dtype)
-        distance = tf.reduce_sum(tf.abs(tf.add(self.src_last_output, tf.negative(self.tgt_last_output))), reduction_indices=1)
-        # loss = tf.nn.sigmoid(distance)
-        # MSE error
-        loss = tf.square(labels - tf.exp(tf.negative(distance)))
-        loss_mean = tf.reduce_mean(loss)
-        return loss_mean
+        logits = self.custom_mat_dot_product(self.src_last_output, self.tgt_outputs)
+        # logits_scaled = tf.nn.softmax(logits)
+
+        # result2 = -tf.reduce_sum(self.labels * tf.log(logits_scaled), 1)
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.labels))
+        return cross_entropy
 
     def init_loss(self):
 
@@ -348,14 +396,6 @@ class Q2VModel(object):
             raise ValueError("Encoder inputs and their lengths must be equal in their "
                              "batch_size, %d != %d" % (input_batch_size, src_inputs_length.shape[0]))
 
-        if self.mode == 'train':
-            target_batch_size = tgt_inputs.shape[0]
-            if target_batch_size != input_batch_size:
-                raise ValueError("Encoder inputs and Decoder inputs must be equal in their "
-                                 "batch_size, %d != %d" % (input_batch_size, target_batch_size))
-            if target_batch_size != tgt_inputs_length.shape[0]:
-                raise ValueError("Decoder targets and their lengths must be equal in their "
-                                 "batch_size, %d != %d" % (target_batch_size, tgt_inputs_length.shape[0]))
         input_feed = dict()
 
         input_feed[self.src_inputs.name] = src_inputs
@@ -424,7 +464,7 @@ class Q2VModel(object):
             self.init_token_op = self.opt.get_init_tokens_op()
             self.chief_queue_runner = self.opt.get_chief_queue_runner()
 
-        # self._add_post_train_ops()
+            # self._add_post_train_ops()
 
     def _add_post_train_ops(self):
         """

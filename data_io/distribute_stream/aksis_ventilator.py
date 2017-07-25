@@ -14,8 +14,6 @@ class AksisDataVentilatorProcess(Process):
     """Process to read the corpus data
     Parameters
     ----------
-        data_dir : str
-            Data_dir for the aksis corpus data
         file_pattern: tuple
             File pattern use to distinguish different corpus, every file pattern will start
             a ventilator process.
@@ -32,12 +30,11 @@ class AksisDataVentilatorProcess(Process):
             process name
     """
 
-    def __init__(self, file_pattern, data_dir,
+    def __init__(self, file_pattern,
                  num_epoch=65535, dropout=-1, ip='127.0.0.1', port='5555',
                  metric_interval=30, neg_number=4, name='VentilatorProcess'):
         Process.__init__(self)
         self.file_pattern = file_pattern
-        self.data_dir = data_dir
         self.num_epoch = num_epoch
         self.dropout = float(dropout)
         # pylint: disable=invalid-name
@@ -70,8 +67,7 @@ class AksisDataVentilatorProcess(Process):
         data_files = glob.glob(self.file_pattern)
 
         if len(data_files) <= 0:
-            raise FileNotFoundError("no files are found for file pattern {} in {}".format(self.file_pattern,
-                                                                                                  self.data_dir))
+            raise FileNotFoundError("no files are found for file pattern {} in {}".format(self.file_pattern))
         # action_files = [os.path.join(self.data_dir, filename) for filename in data_files]
 
         for source, target, label in siamese_data_generator(data_files):

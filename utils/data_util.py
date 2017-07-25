@@ -108,34 +108,22 @@ def find_ngrams(input_list, n):
 
 
 # batch preparation of a given sequence pair for training
-def prepare_train_pair_batch(seqs_x, seqs_y, source_maxlen=sys.maxsize, target_maxlen=sys.maxsize, dtype='int32'):
-    if len(seqs_x) != len(seqs_y):
-        raise ValueError("Sequence lengths must be equal in their "
-                         "batch_size, %d != %d" % (len(seqs_x), len(seqs_y)))
-    # seqs_x, seqs_y: a list of sentences
-    seqs_x = list(map(lambda x: x[:source_maxlen], seqs_x))
-    seqs_y = list(map(lambda x: x[:target_maxlen], seqs_y))
-    lengths_x = [len(s) for s in seqs_x]
-    lengths_y = [len(s) for s in seqs_y]
+def prepare_train_pair_batch(source_seq, targets_list, source_maxlen=sys.maxsize, target_maxlen=sys.maxsize, dtype='int32'):
+    source_tokens, source_lengths = prepare_train_batch(source_seq, source_maxlen)
+    target_y_n = len(targets_list[0])
+    if len(source_lengths) < 1:
+        return tuple([None] * (1 + len(target_y_n)))
 
-    if len(lengths_x) < 1 or len(lengths_y) < 1:
-        return None, None, None, None
-
-    batch_size = len(seqs_x)
-
-    x_lengths = np.array(lengths_x)
-    y_lengths = np.array(lengths_y)
-
-    maxlen_x = np.max(x_lengths)
-    maxlen_y = np.max(y_lengths)
-
-    x = np.ones((batch_size, maxlen_x)).astype(dtype) * end_token
-    y = np.ones((batch_size, maxlen_y)).astype(dtype) * end_token
-
-    for idx, [s_x, s_y] in enumerate(zip(seqs_x, seqs_y)):
-        x[idx, :lengths_x[idx]] = s_x
-        y[idx, :lengths_y[idx]] = s_y
-    return x, x_lengths, y, y_lengths
+    data_list = list()
+    for target_seq in zip(*targets_list):
+        target_tokens, target_lengths = prepare_train_batch(target_seq, target_maxlen)
+        if len(target_lengths) < 1 or len(target_tokens) != len(source_tokens):
+            return tuple([None] * (1 + len(target_y_n)))
+        data_list.append((target_tokens, target_lengths))
+    target_tokens = np.concatenate([target for target, _ in data_list], axis=1)
+    target_lengths = np.vstack([target_lengths for _, target_lengths in data_list])
+    target_lengths = np.transpose(target_lengths)
+    return source_tokens, source_lengths, target_tokens, target_lengths
 
 
 # batch preparation of a given sequence for embedding or decoder
@@ -207,10 +195,10 @@ def extract_siamese_data(line):
     line = re.sub(r'(?:^\(|\)$)', '', line)
     line = line.strip().lower()
     items = re.split(r'\t+', line)
-    if len(items) == 3:
-        return items[0], items[1], items[2]
+    if len(items) == 5:
+        return items[0], items[1:]
     else:
-        return None, None, None
+        return None, None, None, None, None
 
 
 def siamese_data_generator(files):
