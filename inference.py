@@ -1,5 +1,6 @@
 import os
 import sys
+from collections import OrderedDict
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.tensorboard.plugins import projector
@@ -7,36 +8,43 @@ from tqdm import tqdm
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
-from vocabulary.vocab import VocabularyFromWordList
 from config.config import FLAGS
 from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
-from config.config import vocabulary_size
-from config.config import special_words
+from helper.tokenizer_helper import TokenizerHelper
+from helper.tokens_helper import TokensHelper
+from config.config import unk_token, _PUNC, _NUM
+from helper.vocabulary_helper import VocabularyHelper
 import heapq
 
 
 class Inference(object):
     """inference model to encode the sequence to vector"""
-    def __init__(self, source_maxlen=sys.maxsize, batch_size=65536, min_words=-1, max_sequences=sys.maxsize):
+
+    def __init__(self, config=None, batch_size=65536, min_words=-1, max_sequences=sys.maxsize):
         """
         Parameters
         ----------
-        source_maxlen: truncate the source sequence if its length great than `source_maxlen`
         batch_size: define batch size in embedding process
         min_words: ignore the sequence with length < min_words
         max_sequences: tensorflow can not support the variable with memory > 2GB, define `max_sequences` to meet the tf requirement
         """
+        self.config = config
         self.sess = tf.Session()
         self.model = self._init_model()
-        self.batch_data = BatchDataTrigramHandler(self.vocabulary, batch_size=sys.maxsize, min_words=min_words, enable_target=False)
+        tokenizer = TokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
+        self.tokens_helper = TokensHelper(tokenize_fn=tokenizer.tokenize, vocabulary=self.vocabulary, unk_token=unk_token)
+        self.batch_data = BatchDataTrigramHandler(tokens_fn=self.tokens_helper.tokens,
+                                                  batch_size=sys.maxsize, min_words=min_words, enable_target=False)
         self.batch_size = batch_size
-        self.source_maxlen = source_maxlen
         self.max_sequences = max_sequences
 
     def _init_model(self):
         """initialize the q2v model"""
-        model = create_model(self.sess, mode='encode')
+
+        self.config['max_vocabulary_size'] = len(self.vocabulary)
+        model = create_model(self.sess, config=self.config, mode='encode')
+
         return model
 
     def encode(self, inputs):
@@ -77,7 +85,7 @@ class Inference(object):
         embedding_list = []
         # the left over elements that would be truncated by zip
         with tqdm(total=len(sources)) as pbar:
-            for count, each in enumerate(zip(*[iter(sources)]*self.batch_size)):
+            for count, each in enumerate(zip(*[iter(sources)] * self.batch_size)):
                 batch_sources, result = self.encode(each)
                 if result is not None:
                     sources_list.extend(batch_sources)
@@ -105,7 +113,7 @@ class Inference(object):
     @memoized
     def vocabulary(self):
         """load vocabulary"""
-        vocab = VocabularyFromWordList(FLAGS.vocabulary_data_dir, top_words=vocabulary_size, special_words=special_words).build_vocabulary_from_words_list()
+        vocab = VocabularyHelper().load_vocabulary()
         return vocab
 
     def nearest(self, item, file, n):
@@ -113,8 +121,9 @@ class Inference(object):
         sources = set(map(str.strip, open(file)))
         h = []
         with tqdm(total=len(sources)) as pbar:
-            for count, each in enumerate(zip(*[iter(sources)]*self.batch_size)):
+            for count, each in enumerate(zip(*[iter(sources)] * self.batch_size)):
                 batch_sources, result = self.encode(each)
+                pbar.update(self.batch_size)
                 for source, v in zip(batch_sources, result):
                     similarity = cos_distance(item_v, v)
                     if len(h) < n:
@@ -125,11 +134,13 @@ class Inference(object):
         for i in h:
             print(i)
 
+
 def main(_):
-    i = Inference(batch_size=1024)
+    config = OrderedDict(sorted(FLAGS.__flags.items()))
+    i = Inference(batch_size=10, config=config)
     # i.visualize('names')
-    i.nearest("zone diet cookbook", '/Users/keliz/PycharmProjects/q2v_v4/data/rawdata/query_inference', 10)
+    i.nearest("zone diet cookbook", '/Users/keliz/PycharmProjects/q2v_v4/data/rawdata/query_sample_inference', 10)
+
 
 if __name__ == "__main__":
     tf.app.run()
-

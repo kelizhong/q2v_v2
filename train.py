@@ -18,22 +18,25 @@ CUDA_VISIBLE_DEVICES=0 python train.py --gpu 0
 
 from __future__ import print_function
 
-import time
-
+import glob
 import logging.config
-import tensorflow as tf
-import os
-import numpy as np
 import math
-import yaml
-from collections import defaultdict
-from config.config import FLAGS, logging_config_path
-from data_io.distribute_stream.aksis_data_receiver import AksisDataReceiver
-from data_io.single_stream.aksis_data_stream import AksisDataStream
-from helper.model_helper import create_model
-from utils.decorator_util import memoized
-from utils.data_util import prepare_train_pair_batch
+import os
+import time
 from collections import OrderedDict
+from collections import defaultdict
+
+import numpy as np
+import tensorflow as tf
+import yaml
+
+from config.config import FLAGS, logging_config_path
+from data_io.dummy_data_stream import DummyDataStream
+from helper.data_record_helper import DataRecordHelper
+from helper.model_helper import create_model
+from helper.vocabulary_helper import VocabularyHelper
+from utils.data_util import prepare_train_pair_batch
+from utils.decorator_util import memoized
 
 
 class Trainer(object):
@@ -43,18 +46,26 @@ class Trainer(object):
         self.worker_hosts = config.get('worker_hosts').split(",")
         self.task_index = config.get('task_index')
         self.gpu = config.get('gpu')
+        self.label_size = config.get('label_size')
         self.model_dir = os.path.join(config.get('model_dir'), config.get('model_name'))
         self.is_sync = config.get('is_sync')
         self.raw_data_path = config.get('raw_data_path')
         self.display_freq = config.get('display_freq')
         self.batch_size = config.get('batch_size')
-        self.source_maxlen = config.get('source_maxlen')
-        self.target_maxlen = config.get('target_maxlen')
         self.max_vocabulary_size = config.get('max_vocabulary_size')
-        self.vocabulary_data_dir = config.get('vocabulary_data_dir')
         self.data_stream_port = config.get('data_stream_port')
         self.words_list_path = config['words_list_path']
         self.logger = logging.getLogger("model")
+        # add max vocabulary size to config
+        config['max_vocabulary_size'] = self.vocabulary_size
+        self.config = config
+
+    @property
+    @memoized
+    def vocabulary_size(self):
+        vocab = VocabularyHelper().load_vocabulary()
+        vocabulary_size = len(vocab)
+        return vocabulary_size
 
     @property
     @memoized
@@ -106,28 +117,6 @@ class Trainer(object):
 
         return device
 
-    @property
-    def data_zmq_stream(self):
-        if self.data_stream_port is None:
-            raise Exception("port is not defined for zmq stream")
-        data_stream = AksisDataReceiver(port=self.data_stream_port)
-        return data_stream
-
-    @property
-    def data_local_stream(self):
-        data_stream = AksisDataStream(self.vocabulary_data_dir, top_words=self.max_vocabulary_size,
-                                      batch_size=self.batch_size, words_list_file=self.words_list_path,
-                                      raw_data_path=self.raw_data_path).generate_batch_data()
-        return data_stream
-
-    @property
-    def data_stream(self):
-        if self.data_stream_port:
-            stream = self.data_zmq_stream
-        else:
-            stream = self.data_local_stream
-        return stream
-
     def _log_variable_info(self):
         tensor_memory = defaultdict(int)
         for item in tf.global_variables():
@@ -138,21 +127,67 @@ class Trainer(object):
         for key, value in tensor_memory.items():
             self.logger.info("device: %s, memory:%s", key, value)
 
+    def build_model(self):
+        with tf.device(self.device):
+            with tf.Session(target=self.master,
+                            config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+                model = create_model(sess, config=self.config)
+        return model
+
+    def dummy_train(self):
+        stream = DummyDataStream(raw_data_path=self.raw_data_path, batch_size=self.batch_size)
+        with tf.Session() as sess:
+            model = self.build_model()
+            init = tf.global_variables_initializer()
+            sess.run(init)
+            step, step_time, loss = 0.0, 0.0, 0.0
+            words_done, sents_done = 0.0, 0.0
+            for _, _sources_token, _targets_list, _labels in stream.generate_batch_data():
+                start_time = time.time()
+                source_tokens, source_lengths, target_tokens, target_lengths = prepare_train_pair_batch(_sources_token,
+                                                                                                        _targets_list)
+                step_loss = model.train(sess, src_inputs=source_tokens,
+                                        src_inputs_length=source_lengths,
+                                        tgt_inputs=target_tokens, tgt_inputs_length=target_lengths,
+                                        labels=_labels)
+
+                if len(source_tokens) != len(target_tokens) or len(source_tokens) != len(target_lengths) or len(
+                        target_tokens) != len(target_lengths):
+                    raise ValueError("Shape error")
+                loss += step_loss
+                step += 1
+                avg_loss = loss / (step + 1)
+                step_time = time.time() - start_time
+                words_done += (float(np.sum(source_lengths) + np.sum(target_lengths)))
+                sents_done += float(source_tokens.shape[0] * (1 + self.label_size))  # batch_size
+                # Increase the epoch index of the model
+                model.global_epoch_step_op.eval()
+                if model.global_step.eval() % self.display_freq == 0:
+                    avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
+                    words_per_sec = words_done / step_time / self.display_freq
+                    sents_per_sec = sents_done / step_time / self.display_freq
+                    self.logger.info(
+                        "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
+                        (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, avg_loss,
+                         avg_perplexity,
+                         sents_per_sec, words_per_sec))
+                    # set zero timer and loss.
+                    words_done, sents_done = 0.0, 0.0
+
     def train(self):
         if self.job_name == "ps":
             self.server.join()
         else:
-            with tf.device(self.device):
-                with tf.Session(target=self.master,
-                                config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-                    model = create_model(sess)
-                self._log_variable_info()
-                summary_op = tf.summary.merge_all()
-                init_op = tf.global_variables_initializer()
+            file_list = glob.glob('./train.tfrecords')
+            record = DataRecordHelper()
+            source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch = record.get_padded_batch(
+                file_list, batch_size=self.batch_size, label_size=self.label_size)
+            model = self.build_model()
+            self._log_variable_info()
+            init_op = tf.global_variables_initializer()
             sv = tf.train.Supervisor(is_chief=(self.task_index == 0),
                                      logdir=self.model_dir,
                                      init_op=init_op,
-                                     summary_op=summary_op,
                                      saver=model.saver,
                                      global_step=model.global_step,
                                      save_model_secs=180)
@@ -166,30 +201,28 @@ class Trainer(object):
                 if self.task_index == 0 and self.is_sync and self.job_name == "worker":
                     sv.start_queue_runners(sess, [model.chief_queue_runner])
                     sess.run(model.init_token_op)
+                coord = sv.coord
 
-                step_time, loss = 0.0, 0.0
-                words_done, sents_done = 0, 0
-                for ep in range(13000):
-                    data_stream = self.data_stream
-                    self.logger.info("epcho %d", ep)
-                    for step, (_, _sources_token, _targets_list, _labels) in enumerate(data_stream):
-
+                try:
+                    step, step_time, loss = 0.0, 0.0, 0.0
+                    words_done, sents_done = 0.0, 0.0
+                    # Supervisor: http://blog.csdn.net/lenbow/article/details/52218551
+                    while not coord.should_stop():
                         start_time = time.time()
-                        sources_token, sources_len, targets_token, targets_len = prepare_train_pair_batch(_sources_token, _targets_list, source_maxlen=self.source_maxlen, target_maxlen=self.target_maxlen)
                         # Get a batch from training parallel data
-                        if sources_token is None or targets_token is None or len(sources_token) == 0 or len(targets_token) == 0:
-                            self.logger.warning('No samples under source_max_seq_length %d or target_max_seq_length %d',
-                                         self.source_maxlen, self.target_maxlen)
-                            continue
-
-                        # Execute a single training step
-                        step_loss = model.train(sess, src_inputs=sources_token, src_inputs_length=sources_len,
-                                                tgt_inputs=targets_token, tgt_inputs_length=targets_len, labels=_labels)
-                        step_time = time.time() - start_time
+                        _source_batch_data, _source_batch_length, _targets_batch_data, _targets_batch_length, _label_batch = sess.run(
+                            [source_batch_data, source_batch_length, targets_batch_data, targets_batch_length,
+                             label_batch])
+                        step_loss = model.train(sess, src_inputs=_source_batch_data,
+                                                src_inputs_length=_source_batch_length,
+                                                tgt_inputs=_targets_batch_data, tgt_inputs_length=_targets_batch_length,
+                                                labels=_label_batch)
                         loss += step_loss
-                        words_done += float(np.sum(sources_len) + np.sum(targets_len))
-                        sents_done += float(sources_token.shape[0])  # batch_size
-                        avg_loss = loss/(step+1)
+                        step += 1
+                        avg_loss = loss / (step + 1)
+                        step_time = time.time() - start_time
+                        words_done += (float(np.sum(_source_batch_length) + np.sum(_targets_batch_length)))
+                        sents_done += float(_source_batch_data.shape[0] * (1 + self.label_size))  # batch_size
                         # Increase the epoch index of the model
                         model.global_epoch_step_op.eval()
                         if model.global_step.eval() % self.display_freq == 0:
@@ -203,7 +236,10 @@ class Trainer(object):
                                  sents_per_sec, words_per_sec))
                             # set zero timer and loss.
                             words_done, sents_done = 0.0, 0.0
-
+                except tf.errors.OutOfRangeError:
+                    self.logger.info('Finished training.')
+                finally:
+                    coord.request_stop()
             sv.stop()
 
 
@@ -222,7 +258,8 @@ def main(_):
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
     config = OrderedDict(sorted(FLAGS.__flags.items()))
     trainer = Trainer(config=config)
-    trainer.train()
+    # trainer.train()
+    trainer.dummy_train()
 
 
 if __name__ == "__main__":

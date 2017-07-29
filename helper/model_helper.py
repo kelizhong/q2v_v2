@@ -7,10 +7,10 @@ from model.q2v_model import Q2VModel
 from collections import OrderedDict
 
 
-def create_model(session, mode='train', model_name='q2v'):
+def create_model(session, config, mode='train', model_name='q2v'):
     """Create query2vec model and initialize or load parameters in session."""
     logging.info("Creating %s layers of %s units.", FLAGS.num_layers, FLAGS.hidden_units)
-    config = OrderedDict(sorted(FLAGS.__flags.items()))
+
     model = Q2VModel(config, mode)
 
     ckpt = tf.train.get_checkpoint_state(os.path.join(FLAGS.model_dir, model_name))

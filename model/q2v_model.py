@@ -396,6 +396,15 @@ class Q2VModel(object):
             raise ValueError("Encoder inputs and their lengths must be equal in their "
                              "batch_size, %d != %d" % (input_batch_size, src_inputs_length.shape[0]))
 
+        if self.mode == 'train':
+            target_batch_size = tgt_inputs.shape[0]
+            if target_batch_size != input_batch_size:
+                raise ValueError("Encoder inputs and Decoder inputs must be equal in their "
+                                 "batch_size, %d != %d" % (input_batch_size, target_batch_size))
+            if target_batch_size != tgt_inputs_length.shape[0]:
+                raise ValueError("Decoder targets and their lengths must be equal in their "
+                                 "batch_size, %d != %d" % (target_batch_size, tgt_inputs_length.shape[0]))
+
         input_feed = dict()
 
         input_feed[self.src_inputs.name] = src_inputs
