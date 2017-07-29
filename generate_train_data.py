@@ -83,7 +83,7 @@ def generate_train_data(corpus_files, max_num_every_item=8, min_item_length=2, p
                 fd.write('\t'.join(data_item) + '\n')
                 fp.write('\t'.join(parsed_data) + '\n')
         logging.info("Saving train data file in %s", fp.name)
-        logging.info("Saving train parsed data file in %s", fw.name)
+        logging.info("Saving train parsed data file in %s", fd.name)
 
 
 def setup_logger():

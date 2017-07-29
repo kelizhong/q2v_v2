@@ -29,7 +29,7 @@ special_words = {_PAD: pad_token, _UNK: unk_token, _NUM: num_token, _PUNC: punc_
 tf.app.flags.DEFINE_string("model_dir", os.path.join(project_dir, 'data/models'), "Trained model directory.")
 tf.app.flags.DEFINE_integer("display_freq", 1, "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_string("gpu", None, "specify the gpu to use")
-tf.app.flags.DEFINE_string("log_file_name", os.path.join(project_dir, 'data/logs', 'q2v.log'), "Log data file name")
+tf.app.flags.DEFINE_string("tfrecord_train_file", os.path.join(traindata_dir, 'train.tfrecords'), "tfrecord train file")
 tf.app.flags.DEFINE_integer("data_stream_port", None, "port for data zmq stream")
 tf.app.flags.DEFINE_boolean('debug', False, 'Enable debug')
 tf.app.flags.DEFINE_integer("label_size", 4, "How many target samples in one example")

@@ -52,9 +52,8 @@ class Trainer(object):
         self.raw_data_path = config.get('raw_data_path')
         self.display_freq = config.get('display_freq')
         self.batch_size = config.get('batch_size')
-        self.max_vocabulary_size = config.get('max_vocabulary_size')
-        self.data_stream_port = config.get('data_stream_port')
-        self.words_list_path = config['words_list_path']
+        self.max_vocabulary_size = self.vocabulary_size
+        self.tfrecord_train_file = config['tfrecord_train_file']
         self.logger = logging.getLogger("model")
         # add max vocabulary size to config
         config['max_vocabulary_size'] = self.vocabulary_size
@@ -178,7 +177,7 @@ class Trainer(object):
         if self.job_name == "ps":
             self.server.join()
         else:
-            file_list = glob.glob('./train.tfrecords')
+            file_list = glob.glob(self.tfrecord_train_file)
             record = DataRecordHelper()
             source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch = record.get_padded_batch(
                 file_list, batch_size=self.batch_size, label_size=self.label_size)
