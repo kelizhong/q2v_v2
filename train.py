@@ -257,8 +257,8 @@ def main(_):
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
     config = OrderedDict(sorted(FLAGS.__flags.items()))
     trainer = Trainer(config=config)
-    # trainer.train()
-    trainer.dummy_train()
+    trainer.train()
+    # trainer.dummy_train()
 
 
 if __name__ == "__main__":

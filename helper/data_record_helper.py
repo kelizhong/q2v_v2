@@ -94,18 +94,14 @@ if __name__ == '__main__':
     d = DataRecordHelper()
     d.create_sequence([([12, 3, 33], [[1, 3], [2, 32, 2, 100]], [2, 2]), ([12, 3], [[1, 3, 200], [2, 32, 2]], [2, 2])])
     # d.create_sequence([([12, 3, 33], [[1, 3], [2, 32, 2,100]], [2, 3]), ([12, 3], [[1, 3,200], [2, 32, 2]], [2, 2])])
-    # 初始化所有的op
     init = tf.global_variables_initializer()
 
     source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch = d.get_padded_batch(
         ['./train.tfrecords'], batch_size=1, label_size=2)
 
-    # sources = tf.squeeze(data[0])
-    # labels = tf.squeeze(data[-1])
     with tf.Session() as sess:
         sess.run(init)
         coord = tf.train.Coordinator()
-        # 启动队列
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
         try:
