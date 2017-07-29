@@ -76,7 +76,7 @@ class DataRecordHelper(object):
         targets_batch_length = tf.transpose(targets_batch_length)
         # targets_batch_length ->[batch_size, label_size]
         label_batch = data[-1]
-
+        label_batch = tf.div(label_batch, tf.reduce_sum(label_batch, keep_dims=True, axis=1))
         return source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch
 
     def create_sequence(self, data_iterator, record_path='train.tfrecords'):
@@ -112,7 +112,7 @@ if __name__ == '__main__':
             while not coord.should_stop():
                 data = sess.run(
                     [source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch])
-                print(data[2])
+                print(data[-1])
 
         except tf.errors.OutOfRangeError:
             print('Finished extracting.')

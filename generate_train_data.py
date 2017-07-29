@@ -9,13 +9,14 @@ from itertools import combinations
 import time
 import tempfile
 import logging
+import logging.config
 import yaml
 from enum import Enum, unique
 from tqdm import tqdm
 from utils.data_util import sentence_gen
 from utils.random_dict import RandomDict
 from config.config import rawdata_dir
-from helper.tokenizer_helper import TokenizerHelper
+from helper.tokenizer_helper import TextBlobTokenizerHelper
 from config.config import unk_token, _PUNC, _NUM
 from utils.data_util import is_number
 from config.config import logging_config_path
@@ -36,21 +37,23 @@ class data_label(Enum):
     positive_label = 1
 
 
-def build_item_random_dict(corpus_files):
+def build_item_random_dict(corpus_files, min_item_length=2):
     rd = RandomDict()
     for line in tqdm(sentence_gen(corpus_files)):
         items = line.split("\t")[1:]
         for item in items:
-            rd.setdefault(str(item))
+            if len(item.split()) >= min_item_length:
+                rd.setdefault(str(item))
+    logging.info("item dict size:%d", len(rd))
     return rd
 
 
 def generate_train_data(corpus_files, max_num_every_item=8, min_item_length=2, pos_number=3, neg_number=2):
-    rd = build_item_random_dict(corpus_files)
+    rd = build_item_random_dict(corpus_files, min_item_length)
 
-    with tempfile.NamedTemporaryFile(suffix='_%s' % time.strftime("%Y%m%d"), prefix='train_data_raw_', dir=rawdata_dir,
+    with tempfile.NamedTemporaryFile(suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_raw_', dir=rawdata_dir,
                                      delete=False, mode='w', encoding="utf-8") as fd, tempfile.NamedTemporaryFile(
-            suffix='_%s' % time.strftime("%Y%m%d"), prefix='train_data_parsed_', dir=rawdata_dir, delete=False,
+            suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_parsed_', dir=rawdata_dir, delete=False,
             mode='w', encoding="utf-8") as fp:
         for num, line in tqdm(enumerate(sentence_gen(corpus_files))):
             items = line.split("\t")
@@ -90,7 +93,7 @@ def setup_logger():
 
 if __name__ == "__main__":
     setup_logger()
-    tokenizer = TokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
+    tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
     args = parse_args()
     corpus_files = glob.glob(args.file_pattern)
     generate_train_data(corpus_files)
