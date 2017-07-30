@@ -146,8 +146,6 @@ class ProducerProcess(mp.Process):
             for item in items:
                 if len(item.split()) >= self.min_item_length:
                     rd.setdefault(str(item))
-            if len(rd) > 10000:
-                break
         logging.info("Finish item dict, item dict size:%d", len(rd))
         return rd
 
