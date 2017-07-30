@@ -1,5 +1,7 @@
 import os
 import sys
+import heapq
+import pprint
 from collections import OrderedDict
 import tensorflow as tf
 import numpy as np
@@ -11,12 +13,10 @@ from utils.decorator_util import memoized
 from config.config import FLAGS
 from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
-from helper.tokenizer_helper import TokenizerHelper
+from helper.tokenizer_helper import TextBlobTokenizerHelper
 from helper.tokens_helper import TokensHelper
 from config.config import unk_token, _PUNC, _NUM
 from helper.vocabulary_helper import VocabularyHelper
-import heapq
-
 
 class Inference(object):
     """inference model to encode the sequence to vector"""
@@ -32,7 +32,7 @@ class Inference(object):
         self.config = config
         self.sess = tf.Session()
         self.model = self._init_model()
-        tokenizer = TokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
+        tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
         self.tokens_helper = TokensHelper(tokenize_fn=tokenizer.tokenize, vocabulary=self.vocabulary, unk_token=unk_token)
         self.batch_data = BatchDataTrigramHandler(tokens_fn=self.tokens_helper.tokens,
                                                   batch_size=sys.maxsize, min_words=min_words, enable_target=False)
@@ -131,8 +131,8 @@ class Inference(object):
                     else:
                         # Equivalent to a push, then a pop, but faster
                         heapq.heappushpop(h, (similarity, source))
-        for i in h:
-            print(i)
+                if count % 10 == 0:
+                    pprint.pprint(heapq.nlargest(len(h), h))
 
 
 def main(_):
