@@ -13,7 +13,7 @@ from external.cocob_optimizer import COCOB
 class Q2VModel(object):
     def __init__(self, config, mode='train'):
 
-        assert mode.lower() in ['train', 'decode', 'encode']
+        assert mode.lower() in ['train', 'decode', 'encode', 'export']
 
         self.config = config
         self.logger = logging.getLogger("model")
@@ -500,3 +500,23 @@ class Q2VModel(object):
         outputs = sess.run(output_feed, input_feed)
 
         return outputs[0]  # encode: [batch_size, cell.output_size]
+
+    def export(self, sess, export_path):
+        logging.info('Exporting trained model to %s', export_path)
+        builder = tf.saved_model.builder.SavedModelBuilder(export_path)
+        src_inputs = tf.saved_model.utils.build_tensor_info(
+            self.src_inputs)
+        src_inputs_length = tf.saved_model.utils.build_tensor_info(
+            self.src_inputs_length)
+        src_last_output = tf.saved_model.utils.build_tensor_info(self.src_last_output)
+        signature_def = tf.saved_model.signature_def_utils.build_signature_def(inputs={'inputs': src_inputs, 'inputs_length': src_inputs_length},
+                                                                outputs={'src_last_output': src_last_output},
+                                                                method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME)
+        builder.add_meta_graph_and_variables(sess,
+                                             [tf.saved_model.tag_constants.SERVING],
+                                             signature_def_map={
+                                                 tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY: signature_def
+                                             }
+                                             )
+        builder.save()
+        logging.info("Done exporting!")

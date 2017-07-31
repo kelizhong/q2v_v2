@@ -47,6 +47,7 @@ tf.app.flags.DEFINE_boolean('use_residual', False, 'Use residual connection betw
 tf.app.flags.DEFINE_string('optimizer', 'cocob', 'Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)')
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_string('model_name', 'q2v', 'File name used for model checkpoints')
+tf.app.flags.DEFINE_string("model_export_path", os.path.join(project_dir, 'data', 'export'), "model export path")
 
 # For distributed
 # cluster specification

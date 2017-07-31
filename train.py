@@ -33,10 +33,11 @@ import yaml
 from config.config import FLAGS, logging_config_path
 from data_io.dummy_data_stream import DummyDataStream
 from helper.data_record_helper import DataRecordHelper
-from helper.model_helper import create_model
+from helper.model_helper import create_model, export_model
 from helper.vocabulary_helper import VocabularyHelper
 from utils.data_util import prepare_train_pair_batch
 from utils.decorator_util import memoized
+from config.config import traindata_dir
 
 
 class Trainer(object):
@@ -54,6 +55,7 @@ class Trainer(object):
         self.batch_size = config.get('batch_size')
         self.max_vocabulary_size = self.vocabulary_size
         self.tfrecord_train_file = config['tfrecord_train_file']
+        self.model_export_path = config['model_export_path']
         self.logger = logging.getLogger("model")
         # add max vocabulary size to config
         config['max_vocabulary_size'] = self.vocabulary_size
@@ -139,6 +141,7 @@ class Trainer(object):
             model = self.build_model()
             init = tf.global_variables_initializer()
             sess.run(init)
+            model.export(sess, self.model_export_path)
             step, step_time, loss = 0.0, 0.0, 0.0
             words_done, sents_done = 0.0, 0.0
             for _, _sources_token, _targets_list, _labels in stream.generate_batch_data():
@@ -172,6 +175,7 @@ class Trainer(object):
                          sents_per_sec, words_per_sec))
                     # set zero timer and loss.
                     words_done, sents_done = 0.0, 0.0
+            model.saver.save(sess, os.path.join(traindata_dir, 'dummy'))
 
     def train(self):
         if self.job_name == "ps":
@@ -200,8 +204,8 @@ class Trainer(object):
                 if self.task_index == 0 and self.is_sync and self.job_name == "worker":
                     sv.start_queue_runners(sess, [model.chief_queue_runner])
                     sess.run(model.init_token_op)
+                model.export(sess, self.model_export_path)
                 coord = sv.coord
-
                 try:
                     step, step_time, loss = 0.0, 0.0, 0.0
                     words_done, sents_done = 0.0, 0.0
@@ -257,8 +261,9 @@ def main(_):
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
     config = OrderedDict(sorted(FLAGS.__flags.items()))
     trainer = Trainer(config=config)
-    trainer.train()
-    # trainer.dummy_train()
+    # trainer.train()
+    trainer.dummy_train()
+    # trainer.export_model()
 
 
 if __name__ == "__main__":

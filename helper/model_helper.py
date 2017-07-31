@@ -1,10 +1,10 @@
 import os
 import logging
+import shutil
 import tensorflow as tf
 
 from config.config import FLAGS
 from model.q2v_model import Q2VModel
-from collections import OrderedDict
 
 
 def create_model(session, config, mode='train', model_name='q2v'):
@@ -19,8 +19,15 @@ def create_model(session, config, mode='train', model_name='q2v'):
         model.saver.restore(session, ckpt.model_checkpoint_path)
 
     else:
-        assert mode == 'train', "Can not find existed model, please double check your model path"
+        assert mode == 'train' or mode == 'export', "Can not find existed model, please double check your model path"
         logging.info("Created model with fresh parameters.")
         session.run(tf.global_variables_initializer())
-
     return model
+
+
+def export_model(sess, model, export_dir):
+    if os.path.exists(export_dir):
+        logging.info("Removing duplicate: %s" % export_dir)
+        shutil.rmtree(export_dir)
+    model.export(sess, export_dir)
+

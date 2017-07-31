@@ -30,56 +30,76 @@ def parse_args():
     return parser.parse_args()
 
 
+class SaverProcess(mp.Process):
+    def __init__(self, queue, info_interval=10000):
+        super(SaverProcess, self).__init__()
+        self.queue = queue
+        self.info_interval = info_interval
+        self.init_writer_handler()
+
+    def init_writer_handler(self):
+        self.raw_handler = tempfile.NamedTemporaryFile(suffix='_%s' % time.strftime("%Y%m%d%H%M%S"),
+                                                       prefix='train_data_raw_',
+                                                       dir=rawdata_dir,
+                                                       delete=False, mode='w', encoding="utf-8")
+        self.parsed_handler = tempfile.NamedTemporaryFile(
+            suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_parsed_', dir=rawdata_dir, delete=False,
+            mode='w', encoding="utf-8")
+
+    def close_writer_handler(self):
+        logging.info("Closing saver file handler")
+        self.raw_handler.close()
+        self.parsed_handler.close()
+
+    def run(self):
+        logging.info("Starting Saver")
+        with elapsed_timer() as elapsed:
+            for i in itertools.count():
+                try:
+                    data_item_str, parsed_data_str = self.queue.get()
+                    self.raw_handler.write(data_item_str + '\n')
+                    self.parsed_handler.write(parsed_data_str + '\n')
+                finally:
+                    if i % self.info_interval == 0:
+                        logging.info("Saver finished: %d, %.4f sents/s", i, i / elapsed())
+                    self.queue.task_done()
+
+    def terminate(self):
+        super(SaverProcess, self).terminate()
+        self.close_writer_handler()
+
+
 class WorkerProcess(mp.Process):
-    def __init__(self, receiver, sender, name="worker", info_interval=10000):
+    def __init__(self, fronted_queue, backend_queue, name="worker", info_interval=10000):
         super(WorkerProcess, self).__init__()
-        self.receiver = receiver
-        self.sender = sender
+        self.fronted_queue = fronted_queue
+        self.backend_queue = backend_queue
         self.info_interval = info_interval
         self.name = name
 
-    def close_unused_pipe_conn(self):
-        # fork pipe: WorkerProcess receiver <- pipe <- WorkerProcess sender
-        # close the forked pipe sender, worker not use the sender
-        self.sender.close()
-        # fork pipe: WorkerProcess receiver <- pipe
-        # In here only WorkerProcess receiver and ProducerProcess sender connect pipe
-        # WorkerProcess receiver <- pipe <- ProducerProcess sender
-
     def run(self):
-        self.close_unused_pipe_conn()
         logging.info("Starting %s", self.name)
         tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
-        with elapsed_timer() as elapsed, tempfile.NamedTemporaryFile(suffix='_%s' % time.strftime("%Y%m%d%H%M%S"),
-                                                                     prefix='train_data_raw_', dir=rawdata_dir,
-                                                                     delete=False, mode='w',
-                                                                     encoding="utf-8") as raw_handler, tempfile.NamedTemporaryFile(
-                suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_parsed_', dir=rawdata_dir,
-                delete=False, mode='w', encoding="utf-8") as parsed_handler:
+        with elapsed_timer() as elapsed:
             for i in itertools.count():
                 try:
-                    data_item = self.receiver.recv()
+                    data_item = self.fronted_queue.get()
                     parsed_data = map(lambda data: data if is_number(data) else ' '.join(tokenizer.tokenize(data)),
                                       data_item)
                     data_item_str = '\t'.join(data_item) + '\n'
                     parsed_data_str = '\t'.join(parsed_data) + '\n'
-                    raw_handler.write(data_item_str + '\n')
-                    parsed_handler.write(parsed_data_str + '\n')
-                except EOFError:
-                    # when receiver can not receiver any data and the sender was closed, EORFError will be thrown
-                    self.receiver.close()
-                    break
+                    self.backend_queue.put((data_item_str, parsed_data_str))
                 finally:
                     if i % self.info_interval == 0:
                         logging.info("%s finished: %d, %.4f sents/s", self.name, i, i / elapsed())
+                    self.fronted_queue.task_done()
 
 
 class ProducerProcess(mp.Process):
-    def __init__(self, sender, receiver, corpus_files, max_num_every_item=8, min_item_length=2, pos_number=3,
-                 neg_number=2, info_interval=10000, name="producer"):
+    def __init__(self, queue, corpus_files, max_num_every_item=8, min_item_length=2, pos_number=3, neg_number=2,
+                 info_interval=10000, name="producer"):
         super(ProducerProcess, self).__init__()
-        self.sender = sender
-        self.receiver = receiver
+        self.queue = queue
         self.corpus_files = corpus_files
         self.max_num_every_item = max_num_every_item
         self.min_item_length = min_item_length
@@ -89,17 +109,7 @@ class ProducerProcess(mp.Process):
         self.neg_number = neg_number
         self.name = name
 
-    def close_unused_pipe_conn(self):
-        # do not put it in __init__
-        # In every new process, pip will be forked, so need to close some unused connect manually
-        # fork pipe: ProducerProcess receiver<- pipe <-ProducerProcess sender
-        # close the forked pipe receiver, producer not use the receiver
-        self.receiver.close()
-        # fork pipe: pipe <-ProducerProcess sender
-        # In here only ProducerProcess sender connect pipe
-
     def run(self):
-        self.close_unused_pipe_conn()
         logging.info("Starting %s", self.name)
         rd = self.build_item_random_dict()
         for num, line in enumerate(sentence_gen(corpus_files)):
@@ -126,12 +136,10 @@ class ProducerProcess(mp.Process):
                     if comb_item[0] not in neg_item and neg_item not in comb_item[0]:
                         data_item.append(neg_item)
                         data_item.append(str(self.data_label.negative_label.value))
-                self.sender.send(data_item)
+                self.queue.put(data_item)
 
             if num % self.info_interval == 0:
                 logging.info("Producer finished: %d", num)
-        # close sender
-        self.sender.close()
 
     @unique
     class data_label(Enum):
@@ -157,24 +165,22 @@ def setup_logger():
 
 
 if __name__ == '__main__':
-    # receiver <- pipe <- sender
-    receiver, sender = mp.Pipe()
-
+    data_queue = mp.JoinableQueue()
+    parsed_data_queue = mp.JoinableQueue()
     setup_logger()
     args = parse_args()
     # corpus_files = glob.glob('/Users/keliz/Downloads/aksis.purchased.pair/part*')
     corpus_files = glob.glob(args.file_pattern)
-
-    w = WorkerProcess(receiver, sender, "worker_%d" % 0)
-    w.start()
-    # close main process receiver connect
-    receiver.close()
-
-    p = ProducerProcess(sender, receiver, corpus_files)
+    for i in range(min(4, mp.cpu_count())):
+        w = WorkerProcess(data_queue, parsed_data_queue, "worker_%d" % i)
+        w.daemon = True
+        w.start()
+    s = SaverProcess(parsed_data_queue)
+    s.start()
+    p = ProducerProcess(data_queue, corpus_files)
     p.start()
     p.join()
-    # close main process sender connect
-    sender.close()
-
-    # wait worker
-    w.join()
+    data_queue.join()
+    parsed_data_queue.join()
+    s.terminate()
+    p.terminate()

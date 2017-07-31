@@ -7,6 +7,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.tensorboard.plugins import projector
 from tqdm import tqdm
+import h5py
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
@@ -17,6 +18,7 @@ from helper.tokenizer_helper import TextBlobTokenizerHelper
 from helper.tokens_helper import TokensHelper
 from config.config import unk_token, _PUNC, _NUM
 from helper.vocabulary_helper import VocabularyHelper
+
 
 class Inference(object):
     """inference model to encode the sequence to vector"""
@@ -83,9 +85,12 @@ class Inference(object):
 
         sources_list = []
         embedding_list = []
+        h5f = h5py.File('q2v.h5', 'w')
         # the left over elements that would be truncated by zip
         with tqdm(total=len(sources)) as pbar:
             for count, each in enumerate(zip(*[iter(sources)] * self.batch_size)):
+                if count > 10:
+                    break
                 batch_sources, result = self.encode(each)
                 if result is not None:
                     sources_list.extend(batch_sources)
@@ -102,6 +107,7 @@ class Inference(object):
             print('metadata file created')
 
         concat = np.concatenate(embedding_list, axis=0)
+        h5f.create_dataset('q2v', data=concat)
         item_size, unit_size = concat.shape
         item_embedding = tf.get_variable(embed.tensor_name, [item_size, unit_size])
         assign_op = item_embedding.assign(concat)
@@ -136,10 +142,11 @@ class Inference(object):
 
 
 def main(_):
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     config = OrderedDict(sorted(FLAGS.__flags.items()))
-    i = Inference(batch_size=10, config=config)
-    # i.visualize('names')
-    i.nearest("zone diet cookbook", '/Users/keliz/PycharmProjects/q2v_v4/data/rawdata/query_sample_inference', 10)
+    i = Inference(batch_size=1024, config=config)
+    i.visualize('./data/rawdata/query_inference')
+    # i.nearest("women grey nike shoes", './data/rawdata/query_inference', 10)
 
 
 if __name__ == "__main__":
