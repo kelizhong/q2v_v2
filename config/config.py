@@ -1,7 +1,7 @@
 # coding=utf-8
 import os
 import tensorflow as tf
-
+import yaml
 
 project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir))
 rawdata_dir = os.path.join(project_dir, 'data', 'rawdata')
@@ -69,4 +69,33 @@ tf.app.flags.DEFINE_float("lr_decay_factor", 0.9, "Learning rate decays by this 
 tf.app.flags.DEFINE_boolean('use_dummy', False, 'dummy train for test and debug')
 tf.app.flags.DEFINE_string("raw_data_path", os.path.join(project_dir, 'data/rawdata', 'dummy_train_data'), "port for data zmq stream")
 
+# export
+tf.app.flags.DEFINE_string("serving_host", "ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com", "gRPC server host")
+tf.app.flags.DEFINE_integer("serving_port", 9000, "gRPC server port")
+tf.app.flags.DEFINE_string("serving_model_name", "q2v", "TensorFlow model name")
+tf.app.flags.DEFINE_integer("serving_model_version", 1, "TensorFlow model version")
+tf.app.flags.DEFINE_float("request_timeout", 10.0, "Timeout of gRPC request")
+
+
 FLAGS = tf.app.flags.FLAGS
+
+# Tensorflow Serving config
+serving_host = "ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com" # gRPC server host
+serving_port = 9000  # gRPC server port
+serving_model_name = "q2v"  # TensorFlow model name
+serving_model_version = 1  # TensorFlow model version
+request_timeout = 10.0  # Timeout of gRPC request
+# GRPC RETRY config
+GRPC_RETRY_INTERNAL = 1
+GRPC_RETRY_ABORTED = 3
+GRPC_RETRY_UNAVAILABLE = 5
+GRPC_RETRY_DEADLINE_EXCEEDED = 5
+GRPC_RETRY_MIN_SLEEPING = 0.015625
+GRPC_RETRY_MAX_SLEEPING = 1.0
+
+
+with open(os.path.join(project_dir, 'config/config.yaml'), 'r') as f:
+    config_dict = yaml.load(f)
+
+tf_serving_config = config_dict.get('tf_serving')
+

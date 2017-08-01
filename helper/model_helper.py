@@ -7,7 +7,7 @@ from config.config import FLAGS
 from model.q2v_model import Q2VModel
 
 
-def create_model(session, config, mode='train', model_name='q2v'):
+def create_model(session, config, export_dir=None, mode='train', model_name='q2v'):
     """Create query2vec model and initialize or load parameters in session."""
     logging.info("Creating %s layers of %s units.", FLAGS.num_layers, FLAGS.hidden_units)
 
@@ -17,11 +17,13 @@ def create_model(session, config, mode='train', model_name='q2v'):
     if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
         logging.info("Reloading model parameters from %s", ckpt.model_checkpoint_path)
         model.saver.restore(session, ckpt.model_checkpoint_path)
-
+        if export_dir:
+            export_model(session, model, export_dir)
     else:
-        assert mode == 'train' or mode == 'export', "Can not find existed model, please double check your model path"
+        assert mode == 'train', "Can not find existed model, please double check your model path"
         logging.info("Created model with fresh parameters.")
         session.run(tf.global_variables_initializer())
+
     return model
 
 
@@ -29,5 +31,6 @@ def export_model(sess, model, export_dir):
     if os.path.exists(export_dir):
         logging.info("Removing duplicate: %s" % export_dir)
         shutil.rmtree(export_dir)
+
     model.export(sess, export_dir)
 

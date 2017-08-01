@@ -33,7 +33,7 @@ import yaml
 from config.config import FLAGS, logging_config_path
 from data_io.dummy_data_stream import DummyDataStream
 from helper.data_record_helper import DataRecordHelper
-from helper.model_helper import create_model, export_model
+from helper.model_helper import create_model
 from helper.vocabulary_helper import VocabularyHelper
 from utils.data_util import prepare_train_pair_batch
 from utils.decorator_util import memoized
@@ -129,10 +129,9 @@ class Trainer(object):
             self.logger.info("device: %s, memory:%s", key, value)
 
     def build_model(self):
-        with tf.device(self.device):
-            with tf.Session(target=self.master,
+        with tf.Session(target=self.master,
                             config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-                model = create_model(sess, config=self.config)
+            model = create_model(sess, config=self.config)
         return model
 
     def dummy_train(self):
@@ -141,7 +140,6 @@ class Trainer(object):
             model = self.build_model()
             init = tf.global_variables_initializer()
             sess.run(init)
-            model.export(sess, self.model_export_path)
             step, step_time, loss = 0.0, 0.0, 0.0
             words_done, sents_done = 0.0, 0.0
             for _, _sources_token, _targets_list, _labels in stream.generate_batch_data():
@@ -204,11 +202,12 @@ class Trainer(object):
                 if self.task_index == 0 and self.is_sync and self.job_name == "worker":
                     sv.start_queue_runners(sess, [model.chief_queue_runner])
                     sess.run(model.init_token_op)
-                model.export(sess, self.model_export_path)
+
                 coord = sv.coord
                 try:
                     step, step_time, loss = 0.0, 0.0, 0.0
                     words_done, sents_done = 0.0, 0.0
+
                     # Supervisor: http://blog.csdn.net/lenbow/article/details/52218551
                     while not coord.should_stop():
                         start_time = time.time()
@@ -261,8 +260,8 @@ def main(_):
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
     config = OrderedDict(sorted(FLAGS.__flags.items()))
     trainer = Trainer(config=config)
-    # trainer.train()
-    trainer.dummy_train()
+    trainer.train()
+    # trainer.dummy_train()
     # trainer.export_model()
 
 
