@@ -5,16 +5,16 @@ import re
 from collections import Counter
 from itertools import product
 from tqdm import tqdm
+from utils.config_decouple import config
 from utils.serialize import save_obj_json, load_json_object
 from utils.data_util import is_number
 from exception.resource_exception import ResourceNotFoundError
-from config.config import vocabulary_dir
 
 
 class VocabularyHelper(object):
-    def __init__(self, vocabulary_data_dir=vocabulary_dir, vocabulary_name='vocab_newest',
+    def __init__(self, vocabulary_data_dir=None, vocabulary_name='vocab_newest',
                  words_freq_counter_name="words_freq_counter"):
-        self.vocabulary_data_dir = vocabulary_data_dir
+        self.vocabulary_data_dir = vocabulary_data_dir or config('vocabulary_dir')
         self.words_freq_counter_path = os.path.join(self.vocabulary_data_dir, words_freq_counter_name)
         self.vocab_path = os.path.join(self.vocabulary_data_dir, vocabulary_name)
 

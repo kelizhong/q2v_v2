@@ -11,13 +11,11 @@ import itertools
 import yaml
 from enum import Enum, unique
 from tqdm import tqdm
+from utils.config_decouple import config
 from utils.data_util import sentence_gen
 from utils.random_dict import RandomDict
-from config.config import rawdata_dir
 from helper.tokenizer_helper import TextBlobTokenizerHelper
-from config.config import unk_token, _PUNC, _NUM
 from utils.data_util import is_number
-from config.config import logging_config_path
 from utils.context_util import elapsed_timer
 
 
@@ -40,10 +38,10 @@ class SaverProcess(mp.Process):
     def init_writer_handler(self):
         self.raw_handler = tempfile.NamedTemporaryFile(suffix='_%s' % time.strftime("%Y%m%d%H%M%S"),
                                                        prefix='train_data_raw_',
-                                                       dir=rawdata_dir,
+                                                       dir=config('rawdata_dir'),
                                                        delete=False, mode='w', encoding="utf-8")
         self.parsed_handler = tempfile.NamedTemporaryFile(
-            suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_parsed_', dir=rawdata_dir, delete=False,
+            suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_parsed_', dir=config('rawdata_dir'), delete=False,
             mode='w', encoding="utf-8")
 
     def close_writer_handler(self):
@@ -79,7 +77,7 @@ class WorkerProcess(mp.Process):
 
     def run(self):
         logging.info("Starting %s", self.name)
-        tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
+        tokenizer = TextBlobTokenizerHelper()
         with elapsed_timer() as elapsed:
             for i in itertools.count():
                 try:
@@ -159,6 +157,7 @@ class ProducerProcess(mp.Process):
 
 
 def setup_logger():
+    logging_config_path = config('logging_config_path')
     with open(logging_config_path) as f:
         dictcfg = yaml.load(f)
         logging.config.dictConfig(dictcfg)

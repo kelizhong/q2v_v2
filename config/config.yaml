@@ -1,6 +1,0 @@
-tf_serving:
-    host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
-    port: 9000  # gRPC server port
-    model_name: q2v # TensorFlow model name
-    model_version: 1 # TensorFlow model version
-    timeout: 10.0 # Timeout of gRPC request

@@ -1,0 +1,82 @@
+---
+settings:
+    project_dir: &project_dir /Users/keliz/PycharmProjects/q2v_v4
+    rawdata_dir: !!python/object/apply:os.path.join [*project_dir, data/rawdata]
+    traindata_dir: &traindata_dir !!python/object/apply:os.path.join [*project_dir, data/traindata]
+    vocabulary_dir: !!python/object/apply:os.path.join [*project_dir, data/vocabulary]
+    logging_config_path: !!python/object/apply:os.path.join [*project_dir, config/logging.yaml]
+
+# do not change it
+vocabulary_symbol: &vocabulary_symbol
+    _pad_: 0 # pad_token
+    _unk_: 1 # unknown_token
+    _num_: 2 # number_token
+    _punc_: 3 # punc_token
+
+tf_train:
+    <<: *vocabulary_symbol
+    # Run time variables
+    model_name: &model_name q2v # File name used for model checkpoints'
+    model_dir: !!python/object/apply:os.path.join [*project_dir, data/models, *model_name] # Trained model directory.
+    display_freq: 1 # How many training steps to do per checkpoint.
+    gpu: null
+    tfrecord_train_file: !!python/object/apply:os.path.join [*traindata_dir, train.tfrecords]
+    debug: false
+    label_size: 4 # How many target samples in one example
+    batch_size: 128 # Batch size to use during training(positive pair count based).
+
+    # Model parameters
+    num_layers: 1 # Number of layers in the model.
+    embedding_size: 64 # Size of word embedding vector.
+    bidirectional: false # Enable bidirectional encoder
+    hidden_units: 64 # Number of hidden units in each layer
+    use_fp16: false # Use half precision float16 instead of float32 as dtype, currently not support
+    cell_type: gru # RNN cell(lstm, gru) for encoder and decoder, default: lstm
+    dropout_rate: 0.3 # Dropout probability for input/output/state units (0.0: no dropout)
+    use_dropout: false # Use dropout in each rnn cell
+    use_residual: false # Use residual connection between layers
+    optimizer: cocob # Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)
+    max_gradient_norm: 5.0 # Clip gradients to this norm.
+
+    model_export_path: !!python/object/apply:os.path.join [*project_dir, data/serving]
+    learning_rate: 0.1 # learning rate
+    min_learning_rate: 0.0002 # minimum Learning rate
+    decay_steps: 10000 # how many steps to update the learning rate.
+    lr_decay_factor: 0.95 # Learning rate decays by this much.
+
+    # Distributed parameters
+    ps_hosts: 0.0.0.0:2221 # Comma-separated list of hostname:port pairs
+    worker_hosts: 0.0.0.0:2222 # Comma-separated list of hostname:port pairs
+    job_name: single # One of 'ps', 'worker' 'single'
+    task_index: 0 # Index of task within the job
+    is_sync: true # whether to synchronize, aggregate gradients
+
+    # dummy train
+    use_dummy: false # dummy train for test and debug
+    raw_data_path: !!python/object/apply:os.path.join [*traindata_dir, dummy_train_data]
+    dummy_model_dir: !!python/object/apply:os.path.join [*project_dir, data/models/dummy] # Trained model directory.
+    dummy_model_name: dummy_q2v
+
+    # export serving model
+    export_model: false # export_model model
+
+tf_serving:
+    host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
+    port: 9000  # gRPC server port
+    model_name: q2v # TensorFlow model name
+    model_version: 1 # TensorFlow model version
+    timeout: 10.0 # Timeout of gRPC request
+
+gprc_retry:
+    gprc_retry_internal: 1
+    gprc_retry_aborted: 3
+    gprc_retry_unavailable: 5
+    gprc_retry_deadline_exceeded: 5
+    gprc_retry_min_sleeping: 0.015625
+    gprc_retry_max_sleeping: 1.0
+
+nmslib_thrift:
+    host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
+    port: 10000  # gRPC server port
+
+

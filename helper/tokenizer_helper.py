@@ -77,9 +77,9 @@ class TextBlobTokenizerHelper(TokenizerBase):
         words = list()
         for w in tb.tokens:
             if is_number(w):
-                words.append(self.kwargs.get('num_word'))
+                words.append(self.kwargs.get('num_word', '_num_'))
             elif w in string.punctuation:
-                words.append(self.kwargs.get('punc_word'))
+                words.append(self.kwargs.get('punc_word', '_punc_'))
             else:
                 words.append(Word(w).lemmatize())
         return words
@@ -100,9 +100,9 @@ class NLTKTokenizerHelper(TokenizerBase):
         words = list()
         for w in tokens:
             if is_number(w):
-                words.append(self.kwargs.get('num_word'))
+                words.append(self.kwargs.get('num_word', '_num_'))
             elif w in string.punctuation:
-                words.append(self.kwargs.get('punc_word'))
+                words.append(self.kwargs.get('punc_word', '_punc_'))
             else:
                 words.append(self.lemmatizer.lemmatize(w))
         return words

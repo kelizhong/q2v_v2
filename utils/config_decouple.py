@@ -3,7 +3,7 @@ import os
 import sys
 import string
 from shlex import shlex
-
+import yaml
 
 # Useful for very coarse version differentiation.
 PY3 = sys.version_info[0] == 3
@@ -51,12 +51,15 @@ class Config(object):
 
         return self._BOOLEANS[value.lower()]
 
-    def get(self, option, default=undefined, cast=undefined):
+    def get(self, option=undefined, default=undefined, cast=undefined, section=undefined):
         """
         Return the value for option or default if defined.
         """
-        if option in self.repository:
-            value = self.repository.get(option)
+        if isinstance(option, Undefined):
+            value = self.repository.get(section=section)
+            return value
+        if self.repository.contain(option, section):
+            value = self.repository.get(option, section)
         else:
             value = default
 
@@ -81,10 +84,10 @@ class RepositoryBase(object):
     def __init__(self, source):
         raise NotImplementedError
 
-    def __contains__(self, key):
+    def contain(self, key, section=undefined):
         raise NotImplementedError
 
-    def get(self, key):
+    def get(self, key, section=undefined):
         raise NotImplementedError
 
 
@@ -92,19 +95,45 @@ class RepositoryIni(RepositoryBase):
     """
     Retrieves option keys from .ini files.
     """
-    SECTION = 'settings'
+    DEFAULT_SECTION = 'settings'
 
     def __init__(self, source):
         self.parser = ConfigParser()
-        self.parser.readfp(open(source))
+        self.parser.read_file(open(source))
 
-    def __contains__(self, key):
+    def contain(self, key, section=undefined):
+        section = self.DEFAULT_SECTION if isinstance(section, Undefined) else section
         return (key in os.environ or
-                self.parser.has_option(self.SECTION, key))
+                self.parser.has_option(section, key))
 
-    def get(self, key):
-        return (os.environ.get(key) or
-                self.parser.get(self.SECTION, key))
+    def get(self, key=undefined, section=undefined):
+        section = self.DEFAULT_SECTION if isinstance(section, Undefined) else section
+        if isinstance(key, Undefined):
+            return self.parser.items(section)
+        else:
+            return (os.environ.get(key) or
+                self.parser.get(section, key))
+
+
+class RepositoryYaml(RepositoryBase):
+    """
+    Retrieves option keys from settings.yaml files.
+    """
+    DEFAULT_SECTION = 'settings'
+
+    def __init__(self, source):
+        self.config_dict = yaml.load(open(source))
+
+    def contain(self, key, section=undefined):
+        section = self.DEFAULT_SECTION if isinstance(section, Undefined) else section
+        return key in os.environ or key in self.config_dict.get(section)
+
+    def get(self, key=undefined, section=undefined):
+        section = self.DEFAULT_SECTION if isinstance(section, Undefined) else section
+        if isinstance(key, Undefined):
+            return self.config_dict.get(section)
+        else:
+            return os.environ.get(key) or self.config_dict.get(section)[key]
 
 
 class RepositoryEnv(RepositoryBase):
@@ -123,10 +152,10 @@ class RepositoryEnv(RepositoryBase):
             v = v.strip().strip('\'"')
             self.data[k] = v
 
-    def __contains__(self, key):
+    def contain(self, key, section=undefined):
         return key in os.environ or key in self.data
 
-    def get(self, key):
+    def get(self, key, section=undefined):
         return os.environ.get(key) or self.data[key]
 
 
@@ -137,10 +166,10 @@ class RepositoryShell(RepositoryBase):
     def __init__(self, source=None):
         pass
 
-    def __contains__(self, key):
+    def contain(self, key, section=undefined):
         return key in os.environ
 
-    def get(self, key):
+    def get(self, key, section=undefined):
         return os.environ[key]
 
 
@@ -149,6 +178,7 @@ class AutoConfig(object):
     Autodetects the config file and type.
     """
     SUPPORTED = {
+        'settings.yaml': RepositoryYaml,
         'settings.ini': RepositoryIni,
         '.env': RepositoryEnv,
     }

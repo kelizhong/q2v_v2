@@ -9,22 +9,22 @@ from grpc import StatusCode
 from grpc._channel import _Rendezvous, _UnaryUnaryMultiCallable
 from grpc.beta import implementations
 
-from config.config import GRPC_RETRY_INTERNAL, GRPC_RETRY_ABORTED, GRPC_RETRY_UNAVAILABLE, GRPC_RETRY_DEADLINE_EXCEEDED, GRPC_RETRY_MIN_SLEEPING, GRPC_RETRY_MAX_SLEEPING
+from utils.config_decouple import config
 from external.tf_serving.protocol import prediction_service_pb2
 
 logger = logging.getLogger(__name__)
 
 # The maximum number of retries
 _MAX_RETRIES_BY_CODE = {
-    StatusCode.INTERNAL: GRPC_RETRY_INTERNAL,
-    StatusCode.ABORTED: GRPC_RETRY_ABORTED,
-    StatusCode.UNAVAILABLE: GRPC_RETRY_UNAVAILABLE,
-    StatusCode.DEADLINE_EXCEEDED: GRPC_RETRY_DEADLINE_EXCEEDED,
+    StatusCode.INTERNAL: config('gprc_retry_internal', section='gprc_retry'),
+    StatusCode.ABORTED: config('gprc_retry_aborted', section='gprc_retry'),
+    StatusCode.UNAVAILABLE: config('gprc_retry_unavailable', section='gprc_retry'),
+    StatusCode.DEADLINE_EXCEEDED: config('gprc_retry_deadline_exceeded', section='gprc_retry'),
 }
 
 # The minimum seconds (float) of sleeping
-_MIN_SLEEPING = GRPC_RETRY_MIN_SLEEPING
-_MAX_SLEEPING = GRPC_RETRY_MAX_SLEEPING
+_MIN_SLEEPING = config('gprc_retry_min_sleeping', section='gprc_retry')
+_MAX_SLEEPING = config('gprc_retry_max_sleeping', section='gprc_retry')
 
 
 class TFServingClientHelper:

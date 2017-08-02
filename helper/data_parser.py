@@ -1,20 +1,21 @@
 import re
 import logging
 from tqdm import tqdm
+from utils.config_decouple import config
 from helper.tokenizer_helper import TextBlobTokenizerHelper
 from helper.tokens_helper import TokensHelper
-from config.config import unk_token, _PUNC, _NUM, vocabulary_dir
 from utils.data_util import sentence_gen
 from utils.data_util import is_number
 from helper.vocabulary_helper import VocabularyHelper
 
 
 class QueryPairParser(object):
-    def __init__(self, vocab_data_dir=vocabulary_dir):
-        self.tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
+    def __init__(self, vocab_data_dir=None):
+        self.tokenizer = TextBlobTokenizerHelper()
+        vocab_data_dir = vocab_data_dir or config('vocabulary_dir')
         vocab_helper = VocabularyHelper(vocabulary_data_dir=vocab_data_dir)
         vocab = vocab_helper.load_vocabulary()
-        self.tokens_helper = TokensHelper(vocabulary=vocab, unk_token=unk_token)
+        self.tokens_helper = TokensHelper(vocabulary=vocab, unk_token=config('_unk_', section='vocabulary_symbol'))
 
     def data_text_list_generator(self, files):
         for source, target_label_list in self.extract_train_data_generator(files):

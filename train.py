@@ -30,36 +30,39 @@ import numpy as np
 import tensorflow as tf
 import yaml
 
-from config.config import FLAGS, logging_config_path
+from utils.config_decouple import config
+from config.config import FLAGS
 from data_io.dummy_data_stream import DummyDataStream
 from helper.data_record_helper import DataRecordHelper
-from helper.model_helper import create_model
+from helper.model_helper import create_model, export_model
 from helper.vocabulary_helper import VocabularyHelper
 from utils.data_util import prepare_train_pair_batch
 from utils.decorator_util import memoized
-from config.config import traindata_dir
 
 
 class Trainer(object):
-    def __init__(self, config):
-        self.job_name = config.get('job_name')
-        self.ps_hosts = config.get('ps_hosts', '').split(",")
-        self.worker_hosts = config.get('worker_hosts').split(",")
-        self.task_index = config.get('task_index')
-        self.gpu = config.get('gpu')
-        self.label_size = config.get('label_size')
-        self.model_dir = os.path.join(config.get('model_dir'), config.get('model_name'))
-        self.is_sync = config.get('is_sync')
-        self.raw_data_path = config.get('raw_data_path')
-        self.display_freq = config.get('display_freq')
-        self.batch_size = config.get('batch_size')
+    def __init__(self, tf_config):
+        self.job_name = tf_config.get('job_name')
+        self.ps_hosts = tf_config.get('ps_hosts', '').split(",")
+        self.worker_hosts = tf_config.get('worker_hosts').split(",")
+        self.task_index = tf_config.get('task_index')
+        self.gpu = tf_config.get('gpu')
+        self.label_size = tf_config.get('label_size')
+        self.model_dir = tf_config.get('model_dir')
+        self.is_sync = tf_config.get('is_sync')
+        self.raw_data_path = tf_config.get('raw_data_path')
+        self.display_freq = tf_config.get('display_freq')
+        self.batch_size = tf_config.get('batch_size')
         self.max_vocabulary_size = self.vocabulary_size
-        self.tfrecord_train_file = config['tfrecord_train_file']
-        self.model_export_path = config['model_export_path']
+        self.tfrecord_train_file = tf_config['tfrecord_train_file']
+        self.model_export_path = tf_config['model_export_path']
         self.logger = logging.getLogger("model")
         # add max vocabulary size to config
-        config['max_vocabulary_size'] = self.vocabulary_size
-        self.config = config
+        tf_config['max_vocabulary_size'] = self.vocabulary_size
+        self.dummy_model_dir = tf_config['dummy_model_dir']
+        self.dummy_model_name = tf_config['dummy_model_name']
+        self.model_name = tf_config['model_name']
+        self.tf_config = tf_config
 
     @property
     @memoized
@@ -128,16 +131,22 @@ class Trainer(object):
         for key, value in tensor_memory.items():
             self.logger.info("device: %s, memory:%s", key, value)
 
-    def build_model(self):
+    def build_model(self, model_dir):
         with tf.Session(target=self.master,
                             config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-            model = create_model(sess, config=self.config)
+            model = create_model(sess, config=self.tf_config, model_dir=model_dir)
+        return model
+
+    def export_model(self, model_dir):
+        with tf.Session(target=self.master,
+                            config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            model = export_model(sess, config=self.tf_config, export_dir=self.model_export_path, model_dir=model_dir)
         return model
 
     def dummy_train(self):
         stream = DummyDataStream(raw_data_path=self.raw_data_path, batch_size=self.batch_size)
         with tf.Session() as sess:
-            model = self.build_model()
+            model = self.build_model(self.dummy_model_dir)
             init = tf.global_variables_initializer()
             sess.run(init)
             step, step_time, loss = 0.0, 0.0, 0.0
@@ -161,19 +170,19 @@ class Trainer(object):
                 words_done += (float(np.sum(source_lengths) + np.sum(target_lengths)))
                 sents_done += float(source_tokens.shape[0] * (1 + self.label_size))  # batch_size
                 # Increase the epoch index of the model
-                model.global_epoch_step_op.eval()
-                if model.global_step.eval() % self.display_freq == 0:
+                global_step = model.global_epoch_step_op.eval()
+                if global_step % self.display_freq == 0:
                     avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
                     words_per_sec = words_done / step_time / self.display_freq
                     sents_per_sec = sents_done / step_time / self.display_freq
                     self.logger.info(
                         "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
-                        (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, avg_loss,
+                        (global_step, model.learning_rate.eval(), step_time, step_loss, avg_loss,
                          avg_perplexity,
                          sents_per_sec, words_per_sec))
                     # set zero timer and loss.
                     words_done, sents_done = 0.0, 0.0
-            model.saver.save(sess, os.path.join(traindata_dir, 'dummy'))
+                    model.saver.save(sess, os.path.join(self.dummy_model_dir, self.dummy_model_name), global_step=global_step)
 
     def train(self):
         if self.job_name == "ps":
@@ -183,7 +192,7 @@ class Trainer(object):
             record = DataRecordHelper()
             source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch = record.get_padded_batch(
                 file_list, batch_size=self.batch_size, label_size=self.label_size)
-            model = self.build_model()
+            model = self.build_model(self.model_dir)
             self._log_variable_info()
             init_op = tf.global_variables_initializer()
             sv = tf.train.Supervisor(is_chief=(self.task_index == 0),
@@ -191,7 +200,8 @@ class Trainer(object):
                                      init_op=init_op,
                                      saver=model.saver,
                                      global_step=model.global_step,
-                                     save_model_secs=180)
+                                     save_model_secs=180,
+                                     checkpoint_basename=self.model_name)
             gpu_options = tf.GPUOptions(allow_growth=True, allocator_type="BFC")
             session_config = tf.ConfigProto(allow_soft_placement=True,
                                             log_device_placement=False,
@@ -226,16 +236,14 @@ class Trainer(object):
                         words_done += (float(np.sum(_source_batch_length) + np.sum(_targets_batch_length)))
                         sents_done += float(_source_batch_data.shape[0] * (1 + self.label_size))  # batch_size
                         # Increase the epoch index of the model
-                        model.global_epoch_step_op.eval()
-                        if model.global_step.eval() % self.display_freq == 0:
+                        global_step = model.global_epoch_step_op.eval()
+                        if global_step % self.display_freq == 0:
                             avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
                             words_per_sec = words_done / step_time / self.display_freq
                             sents_per_sec = sents_done / step_time / self.display_freq
                             self.logger.info(
                                 "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
-                                (model.global_step.eval(), model.learning_rate.eval(), step_time, step_loss, avg_loss,
-                                 avg_perplexity,
-                                 sents_per_sec, words_per_sec))
+                                (global_step, model.learning_rate.eval(), step_time, step_loss, avg_loss, avg_perplexity, sents_per_sec, words_per_sec))
                             # set zero timer and loss.
                             words_done, sents_done = 0.0, 0.0
                 except tf.errors.OutOfRangeError:
@@ -246,6 +254,7 @@ class Trainer(object):
 
 
 def setup_logger():
+    logging_config_path = config('logging_config_path')
     with open(logging_config_path) as f:
         dictcfg = yaml.load(f)
         logging.config.dictConfig(dictcfg)
@@ -258,11 +267,14 @@ def main(_):
         os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu if FLAGS.gpu else ''
-    config = OrderedDict(sorted(FLAGS.__flags.items()))
-    trainer = Trainer(config=config)
-    trainer.train()
-    # trainer.dummy_train()
-    # trainer.export_model()
+    tf_config = OrderedDict(sorted(FLAGS.__flags.items()))
+    trainer = Trainer(tf_config=tf_config)
+    if FLAGS.use_dummy:
+        trainer.dummy_train()
+    elif FLAGS.export_model:
+        trainer.export_model(tf_config['dummy_model_dir'])
+    else:
+        trainer.train()
 
 
 if __name__ == "__main__":

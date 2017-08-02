@@ -2,12 +2,12 @@ import json
 import os
 import numpy
 import tensorflow as tf
-from flask import Flask, jsonify, g
+from flask import Flask, jsonify
 from flask_restful import Resource, Api
 
 from google.protobuf.json_format import MessageToJson
 
-from config.config import tf_serving_config, unk_token, _PUNC, _NUM, rawdata_dir
+from utils.config_decouple import config
 from external.tf_serving.protocol import predict_pb2
 from helper.tensorflow_serving_client_helper import TFServingClientHelper
 from helper.thrift_client_helper import ThriftClientHelper
@@ -20,28 +20,28 @@ FLAGS = tf.app.flags.FLAGS
 app = Flask(__name__)
 api = Api(app)
 
-
 vocabulary = VocabularyHelper().load_vocabulary()
-tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
-tokens_helper = TokensHelper(tokenize_fn=tokenizer.tokenize, vocabulary=vocabulary, unk_token=unk_token)
+tokenizer = TextBlobTokenizerHelper()
+tokens_helper = TokensHelper(tokenize_fn=tokenizer.tokenize, vocabulary=vocabulary,
+                             unk_token=config('_unk_', section='vocabulary_symbol'))
 
-tf_serving_host = tf_serving_config['host']
-tf_serving_port = tf_serving_config['port']
-model_name = tf_serving_config['model_name']
-model_version = tf_serving_config['model_version']
-request_timeout = tf_serving_config['timeout']
+tf_serving_host = config('host', section='tf_serving')
+tf_serving_port = config('port', section='tf_serving')
+model_name = config('model_name', section='tf_serving')
+model_version = config('model_version', section='tf_serving')
+request_timeout = config('timeout', section='tf_serving')
 
-
-client = ThriftClientHelper(host='ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com', port=10000)
+client = ThriftClientHelper(host=config('host', section='nmslib_thrift'), port=config('port', section='nmslib_thrift'))
 
 tf_serving_client = TFServingClientHelper(tf_serving_host, tf_serving_port)
 
-meta = dict((line.strip().split('\t') for line in open(os.path.join(rawdata_dir, 'q2v.tsv'))))
+meta = dict((line.strip().split('\t') for line in open(os.path.join(config('rawdata_dir'), 'q2v.tsv'))))
 
 
 @app.before_first_request
 def setup_database(*args, **kwargs):
     print("sdfdsfdsfds")
+
 
 def make_inference_request(inputs):
     lengths = [len(s) for s in inputs]
@@ -68,7 +68,6 @@ def make_inference_request(inputs):
 
 class HelloWorld(Resource):
     def get(self, query):
-
         input = tokens_helper.tokens(query, return_data=False)
         print(input)
 
@@ -82,6 +81,7 @@ class HelloWorld(Resource):
         res = [(meta.get(str(ele[0]), 'unknown word for %d' % ele[0]), ele[1]) for ele in res]
 
         return jsonify(res)
+
 
 api.add_resource(HelloWorld, '/<query>')
 

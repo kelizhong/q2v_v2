@@ -8,6 +8,7 @@ import numpy as np
 from tensorflow.contrib.tensorboard.plugins import projector
 from tqdm import tqdm
 import h5py
+from utils.config_decouple import config
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.model_helper import create_model
 from utils.decorator_util import memoized
@@ -16,14 +17,13 @@ from utils.math_util import cos_distance
 from utils.data_util import prepare_train_batch
 from helper.tokenizer_helper import TextBlobTokenizerHelper
 from helper.tokens_helper import TokensHelper
-from config.config import unk_token, _PUNC, _NUM
 from helper.vocabulary_helper import VocabularyHelper
 
 
 class Inference(object):
     """inference model to encode the sequence to vector"""
 
-    def __init__(self, config=None, batch_size=65536, min_words=-1, max_sequences=sys.maxsize):
+    def __init__(self, tf_config=None, batch_size=65536, min_words=-1, max_sequences=sys.maxsize):
         """
         Parameters
         ----------
@@ -31,11 +31,12 @@ class Inference(object):
         min_words: ignore the sequence with length < min_words
         max_sequences: tensorflow can not support the variable with memory > 2GB, define `max_sequences` to meet the tf requirement
         """
-        self.config = config
+        self.tf_config = tf_config
         self.sess = tf.Session()
         self.model = self._init_model()
-        tokenizer = TextBlobTokenizerHelper(unk_token=unk_token, num_word=_NUM, punc_word=_PUNC)
-        self.tokens_helper = TokensHelper(tokenize_fn=tokenizer.tokenize, vocabulary=self.vocabulary, unk_token=unk_token)
+        tokenizer = TextBlobTokenizerHelper()
+        self.tokens_helper = TokensHelper(tokenize_fn=tokenizer.tokenize, vocabulary=self.vocabulary,
+                                          unk_token=config('_unk_', section='vocabulary_symbol'))
         self.batch_data = BatchDataTrigramHandler(tokens_fn=self.tokens_helper.tokens,
                                                   batch_size=sys.maxsize, min_words=min_words, enable_target=False)
         self.batch_size = batch_size
@@ -44,8 +45,9 @@ class Inference(object):
     def _init_model(self):
         """initialize the q2v model"""
 
-        self.config['max_vocabulary_size'] = len(self.vocabulary)
-        model = create_model(self.sess, config=self.config, mode='encode')
+        self.tf_config['max_vocabulary_size'] = len(self.vocabulary)
+        model = create_model(self.sess, config=self.tf_config, mode='encode',
+                             model_dir=self.tf_config['dummy_model_dir'])
 
         return model
 
@@ -74,12 +76,12 @@ class Inference(object):
         """
         model_path = os.path.join(FLAGS.model_dir, 'visualize')
         writer = tf.summary.FileWriter(model_path, self.sess.graph)
-        config = projector.ProjectorConfig()
-        embed = config.embeddings.add()
+        proj_config = projector.ProjectorConfig()
+        embed = proj_config.embeddings.add()
         embed.tensor_name = tensor_name
         meta_path = os.path.join(model_path, "%s.tsv" % proj_name)
         embed.metadata_path = meta_path
-        projector.visualize_embeddings(writer, config)
+        projector.visualize_embeddings(writer, proj_config)
         sources = set(map(str.strip, open(file)))
         metadata_path = embed.metadata_path
 
@@ -89,8 +91,6 @@ class Inference(object):
         # the left over elements that would be truncated by zip
         with tqdm(total=len(sources)) as pbar:
             for count, each in enumerate(zip(*[iter(sources)] * self.batch_size)):
-                if count > 10:
-                    break
                 batch_sources, result = self.encode(each)
                 if result is not None:
                     sources_list.extend(batch_sources)
@@ -143,9 +143,9 @@ class Inference(object):
 
 def main(_):
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-    config = OrderedDict(sorted(FLAGS.__flags.items()))
-    i = Inference(batch_size=1024, config=config)
-    i.visualize('./data/rawdata/query_inference')
+    tf_config = OrderedDict(sorted(FLAGS.__flags.items()))
+    i = Inference(batch_size=1, tf_config=tf_config)
+    i.visualize('./data/rawdata/query_sample_inference')
     # i.nearest("women grey nike shoes", './data/rawdata/query_inference', 10)
 
 

@@ -6,16 +6,16 @@ import sys
 
 import logging.config
 import yaml
+from utils.config_decouple import config
 from helper.data_record_helper import DataRecordHelper
 
 from helper.data_parser import QueryPairParser
-from config.config import logging_config_path, traindata_dir
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Vocabulary tools')
 
-    parser.add_argument('-tp', '--tfrecord-path', type=str, default=os.path.join(traindata_dir, 'train.tfrecords'),
+    parser.add_argument('-tp', '--tfrecord-path', type=str, default=os.path.join(config('traindata_dir'), 'train.tfrecords'),
                                   help='path for tfrecord train data')
     parser.add_argument('-mw', '--min-words', type=int, default=2, help='ignore the sequence that length < min_words')
     parser.add_argument('file_pattern', type=str, help='the corpus input files pattern')
@@ -29,6 +29,7 @@ def signal_handler(signal, frame):
 
 
 def setup_logger():
+    logging_config_path = config('logging_config_path')
     with open(logging_config_path) as f:
         dictcfg = yaml.load(f)
         logging.config.dictConfig(dictcfg)
