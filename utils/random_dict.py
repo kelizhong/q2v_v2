@@ -3,6 +3,7 @@ import numpy as np
 
 
 class RandomDict(MutableMapping):
+
     def __init__(self, *args, **kwargs):
         """ Create RandomDict object with contents specified by arguments.
         Any argument
@@ -27,7 +28,7 @@ class RandomDict(MutableMapping):
         self.keys[key] = i
 
     def __delitem__(self, key):
-        if not key in self.keys:
+        if key not in self.keys:
             raise KeyError
 
         # index of item to delete is i
@@ -48,7 +49,7 @@ class RandomDict(MutableMapping):
         del self.keys[key]
 
     def __getitem__(self, key):
-        if not key in self.keys:
+        if key not in self.keys:
             raise KeyError
 
         i = self.keys[key]

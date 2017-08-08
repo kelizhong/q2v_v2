@@ -28,7 +28,17 @@ _MAX_SLEEPING = config('gprc_retry_max_sleeping', section='gprc_retry')
 
 
 class TFServingClientHelper:
+
     def __init__(self, host='localhost', port='9000'):
+        """Client to connect tensorflow serving sever
+
+        Parameters
+        ----------
+        host : {str}, optional
+            host addreess (the default is 'localhost')
+        port : {str}, optional
+            port  (the default is '9000')
+        """
         self.host = host
         self.port = port
         self._init_predict_service_stub()

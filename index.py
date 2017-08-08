@@ -38,11 +38,6 @@ tf_serving_client = TFServingClientHelper(tf_serving_host, tf_serving_port)
 meta = dict((line.strip().split('\t') for line in open(os.path.join(config('rawdata_dir'), 'q2v.tsv'))))
 
 
-@app.before_first_request
-def setup_database(*args, **kwargs):
-    print("sdfdsfdsfds")
-
-
 def make_inference_request(inputs):
     lengths = [len(s) for s in inputs]
     # Generate inference data
@@ -66,7 +61,8 @@ def make_inference_request(inputs):
     return request
 
 
-class HelloWorld(Resource):
+class NMSLB(Resource):
+
     def get(self, query):
         input = tokens_helper.tokens(query, return_data=False)
         print(input)
@@ -83,7 +79,10 @@ class HelloWorld(Resource):
         return jsonify(res)
 
 
-api.add_resource(HelloWorld, '/<query>')
+api.add_resource(NMSLB, '/<query>')
 
 if __name__ == '__main__':
+    """Simple version to get nearest queries
+    TODO: enhance it and comment it lot
+    """
     app.run(debug=True, use_reloader=False)

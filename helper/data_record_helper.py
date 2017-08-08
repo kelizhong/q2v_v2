@@ -3,6 +3,8 @@ import tensorflow as tf
 
 
 class DataRecordHelper(object):
+    """TF data record helper
+    """
     @staticmethod
     def _int64_feature(value):
         """Wrapper for inserting an int64 Feature into a Example proto."""
@@ -14,7 +16,23 @@ class DataRecordHelper(object):
         return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
     @staticmethod
-    def create_sequence_example(source, targets, label):
+    def create_record_example(source, targets, label):
+        """create source taget examle
+
+        Parameters
+        ----------
+        source : {list}
+            source tokens
+        targets : {list}
+            targets tokens list
+        label : {list}
+            label list
+
+        Returns
+        -------
+        [example]
+            record example
+        """
         assert len(targets) == len(
             label), "targets length must equal to label length, targets length:%d, label length:%d" % (
             len(targets), len(label))
@@ -31,6 +49,26 @@ class DataRecordHelper(object):
         return ex
 
     def get_padded_batch(self, file_list, batch_size, label_size, queue_capacity=2048, num_enqueuing_threads=4):
+        """Get padded batch
+
+        Parameters
+        ----------
+        file_list : {list}
+            tf record files list
+        batch_size : {number}
+            data batch size
+        label_size : {number}
+            label size, same with train data column size(positive data and negative data)
+        queue_capacity : {number}, optional
+            queue capacity (the default is 2048)
+        num_enqueuing_threads : {number}, optional
+            Number of enqueuing thread (the default is 4)
+
+        Returns
+        -------
+        [tuple]
+            source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch
+        """
         file_queue = tf.train.string_input_producer(file_list)
         reader = tf.TFRecordReader()
         _, serialized_example = reader.read(file_queue)
@@ -82,14 +120,15 @@ class DataRecordHelper(object):
     def create_sequence(self, data_iterator, record_path='train.tfrecords'):
         writer = tf.python_io.TFRecordWriter(record_path)
         for i, (source, targets, label) in enumerate(data_iterator):
-            # sequence_example = create_sequence_example([12, 3, 33], [[1, 3, i], [2, 32, 2]], [2, 2])
-            sequence_example = DataRecordHelper.create_sequence_example(source, targets, label)
+            # sequence_example = create_record_example([12, 3, 33], [[1, 3, i], [2, 32, 2]], [2, 2])
+            sequence_example = DataRecordHelper.create_record_example(source, targets, label)
 
             writer.write(sequence_example.SerializeToString())
         writer.close()
 
 
 if __name__ == '__main__':
+    """For test"""
     file_list = glob.glob('./train.tfrecords')
     d = DataRecordHelper()
     d.create_sequence([([12, 3, 33], [[1, 3], [2, 32, 2, 100]], [2, 2]), ([12, 3], [[1, 3, 200], [2, 32, 2]], [2, 2])])

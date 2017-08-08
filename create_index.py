@@ -5,7 +5,7 @@ from multiprocessing import cpu_count
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Vocabulary tools')
+    parser = argparse.ArgumentParser(description='Create nms lib index')
 
     # vocabulary parameter
     parser.add_argument('-hf', '--h5-file', type=str, default='q2v.h5', help='h5 file for query vector')
@@ -25,6 +25,7 @@ def create_nms_index(h5_file, dataset, index_name):
     'created and saved index'
     index.saveIndex(index_name)
     nmslib.freeIndex(index)
+
 
 if __name__ == "__main__":
     args = parse_args()

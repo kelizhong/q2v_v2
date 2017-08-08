@@ -31,7 +31,23 @@ DEFAULT_PROTOCOL = 'binary'
 
 
 class ThriftClientHelper:
+
     def __init__(self, host='127.0.0.1', port=10000, pool_size=8, retObj=False, retExternId=False):
+        """NMSLIB thrift client helper
+
+        Parameters
+        ----------
+        host : {str}, optional
+            host address (the default is '127.0.0.1')
+        port : {number}, optional
+            port (the default is 10000)
+        pool_size : {number}, optional
+            connect pool size (the default is 8)
+        retObj : {bool}, optional
+            Whether to return result object, if false, just return id list (the default is False)
+        retExternId : {bool}, optional
+            return externId
+        """
         self.host = host
         self.port = port
         self.retObj = retObj
@@ -70,6 +86,7 @@ class ConnectionPool(object):
     :param kwargs: keyword arguments passed to
                    :py:class:`happybase.Connection`
     """
+
     def __init__(self, size, **kwargs):
         if not isinstance(size, int):
             raise TypeError("Pool 'size' arg must be an integer")
@@ -340,4 +357,3 @@ class Connection(object):
     def knn_query(self, k, query, return_object=False, return_external_id=False):
         res = self.client.knnQuery(k, query, return_object, return_external_id)
         return res
-

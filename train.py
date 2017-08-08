@@ -41,6 +41,7 @@ from utils.decorator_util import memoized
 
 
 class Trainer(object):
+
     def __init__(self, tf_config):
         self.job_name = tf_config.get('job_name')
         self.ps_hosts = tf_config.get('ps_hosts', '').split(",")
@@ -140,7 +141,7 @@ class Trainer(object):
     def export_model(self, model_dir):
         with tf.Session(target=self.master,
                             config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-            model = export_model(sess, config=self.tf_config, export_dir=self.model_export_path, model_dir=model_dir)
+            model = export_model(sess, config=self.tf_config, model_export_path=self.model_export_path, model_dir=model_dir)
         return model
 
     def dummy_train(self):

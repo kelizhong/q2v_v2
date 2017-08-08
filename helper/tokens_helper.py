@@ -4,9 +4,11 @@ from helper.tokenizer_helper import WhitespaceTokenizerHelper
 
 
 class TokensHelper(object):
-    def __init__(self, vocabulary, tokenize_fn=None,  **kwargs):
+    """Convert word to id"""
+
+    def __init__(self, vocabulary, tokenize_fn=None, **kwargs):
         self.vocabulary = vocabulary
-        self.tokenize = tokenize_fn if tokenize_fn else WhitespaceTokenizerHelper().tokenize
+        self.tokenize = tokenize_fn or WhitespaceTokenizerHelper().tokenize
         self.kwargs = kwargs
 
     @staticmethod

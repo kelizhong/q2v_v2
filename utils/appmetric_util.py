@@ -6,6 +6,9 @@ from appmetrics import metrics
 from appmetrics import reporter
 
 
+logger = logging.getLogger(__name__)
+
+
 def with_meter(name, value=1, interval=-1):
     """
     Call-counting decorator: each time the wrapped function is called
@@ -43,6 +46,7 @@ class AppMetric(object):
     interval: int
         report the metric for every interval seconds, if interval < 0, not report the metric
     """
+
     def __init__(self, metric=None, name='metric', interval=-1):
         self.metric = metric or metrics.new_meter(name)
 
@@ -53,7 +57,7 @@ class AppMetric(object):
     @staticmethod
     def log_metrics(metrics):
         """log the metric"""
-        logging.info(metrics)
+        logger.info(metrics)
 
     def notify(self, value):
         """Add a new observation to the metric"""

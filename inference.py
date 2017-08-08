@@ -47,7 +47,7 @@ class Inference(object):
 
         self.tf_config['max_vocabulary_size'] = len(self.vocabulary)
         model = create_model(self.sess, config=self.tf_config, mode='encode',
-                             model_dir=self.tf_config['dummy_model_dir'])
+                             model_dir=self.tf_config['model_dir'])
 
         return model
 

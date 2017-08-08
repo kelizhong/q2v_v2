@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 
+import logging
 import logging.config
 import yaml
 from utils.config_decouple import config
@@ -11,9 +12,11 @@ from helper.data_record_helper import DataRecordHelper
 
 from helper.data_parser import QueryPairParser
 
+logger = logging.getLogger(__name__)
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Vocabulary tools')
+    parser = argparse.ArgumentParser(description='Generate tf records files')
 
     parser.add_argument('-tp', '--tfrecord-path', type=str, default=os.path.join(config('traindata_dir'), 'train.tfrecords'),
                                   help='path for tfrecord train data')
@@ -24,7 +27,7 @@ def parse_args():
 
 
 def signal_handler(signal, frame):
-    logging.info('Stop!!!')
+    logger.info('Stop!!!')
     sys.exit(0)
 
 

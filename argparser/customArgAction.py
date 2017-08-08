@@ -6,6 +6,7 @@ import argparse
 
 class AppendTupleWithoutDefault(argparse._AppendAction):
     """Ignore the default tuple value when append the tuple"""
+
     def __call__(self, parser, namespace, values, option_string=None):
 
         items = argparse._copy.copy(argparse._ensure_value(namespace, self.dest, []))

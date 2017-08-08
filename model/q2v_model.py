@@ -5,12 +5,12 @@ from tensorflow.python.ops.rnn_cell import GRUCell
 from tensorflow.python.ops.rnn_cell import LSTMCell, LSTMStateTuple
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
-
 import logging
-from external.cocob_optimizer import COCOB
+from external.optimizer.cocob_optimizer import COCOB
 
 
 class Q2VModel(object):
+
     def __init__(self, config, mode='train'):
 
         assert mode.lower() in ['train', 'decode', 'encode', 'export']
@@ -20,7 +20,8 @@ class Q2VModel(object):
         self.mode = mode.lower()
 
         self.job_name = config['job_name']
-        self.worker_hosts_size = len(config['worker_hosts'].split(",")) if config['worker_hosts'] else 0
+        self.worker_hosts_size = len(config['worker_hosts'].split(",")) if config[
+            'worker_hosts'] else 0
 
         self.bidirectional = config['bidirectional']
         self.dtype = tf.float16 if config['use_fp16'] else tf.float32
@@ -42,7 +43,8 @@ class Q2VModel(object):
         self.worker_hosts = config['worker_hosts']
 
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
-        self.global_epoch_step = tf.Variable(0, trainable=False, name='global_epoch_step')
+        self.global_epoch_step = tf.Variable(
+            0, trainable=False, name='global_epoch_step')
         self.global_epoch_step_op = \
             tf.assign(self.global_epoch_step, self.global_epoch_step + 1)
 
@@ -74,11 +76,13 @@ class Q2VModel(object):
                 return tf.less(i, samples_n)
 
             def body(_length_idx, _input_idx, _tgt_outputs):
-                tgt_length = tf.slice(self.tgt_inputs_length, [0, _length_idx], [-1, 1])
+                tgt_length = tf.slice(self.tgt_inputs_length, [
+                                      0, _length_idx], [-1, 1])
                 tgt_length = tf.squeeze(tgt_length)
                 max_tgt_length = tf.reduce_max(tgt_length)
 
-                tgt_input = tf.slice(self.tgt_inputs, [0, _input_idx], [-1, max_tgt_length])
+                tgt_input = tf.slice(
+                    self.tgt_inputs, [0, _input_idx], [-1, max_tgt_length])
                 tgt_output = self.build_target_encoder(tgt_input, tgt_length)
                 _tgt_outputs = tf.cond(tf.less(_length_idx, 1), lambda: tgt_output,
                                        lambda: tf.concat([_tgt_outputs, tgt_output], 1))
@@ -109,7 +113,8 @@ class Q2VModel(object):
 
     def init_placeholders(self):
 
-        self.keep_prob_placeholder = tf.placeholder(self.dtype, shape=[], name='keep_prob')
+        self.keep_prob_placeholder = tf.placeholder(
+            self.dtype, shape=[], name='keep_prob')
 
         # TODO use MutableHashTable to store word->id mapping in checkpoint
         # source_inputs: [batch_size, max_time_steps]
@@ -131,7 +136,8 @@ class Q2VModel(object):
             self.tgt_inputs_length = tf.placeholder(
                 dtype=tf.int32, shape=(None, None), name='target_inputs_length')
 
-            self.labels = tf.placeholder(tf.float32, (None, None), name='labels')
+            self.labels = tf.placeholder(
+                tf.float32, (None, None), name='labels')
 
     def build_single_cell(self):
         cell_type = LSTMCell
@@ -155,8 +161,10 @@ class Q2VModel(object):
     def _init_embedding_layer(self):
         # create word embedding vectors
         self.encoder_embeddings = tf.get_variable(name='embedding',
-                                                  shape=[self.max_vocabulary_size, self.embedding_size],
-                                                  initializer=tf.random_uniform_initializer(-1.0, 1.0),
+                                                  shape=[
+                                                      self.max_vocabulary_size, self.embedding_size],
+                                                  initializer=tf.random_uniform_initializer(
+                                                      -1.0, 1.0),
                                                   dtype=self.dtype)
 
     def build_source_encoder(self):
@@ -172,7 +180,8 @@ class Q2VModel(object):
             if self.use_residual:
                 # Input projection layer to feed embedded inputs to the cell
                 # ** Essential when use_residual=True to match input/output dims
-                input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
+                input_layer = Dense(self.hidden_units,
+                                    dtype=self.dtype, name='input_projection')
 
                 # Embedded inputs having gone through input projection layer
                 src_inputs_embedded = input_layer(src_inputs_embedded)
@@ -198,7 +207,8 @@ class Q2VModel(object):
                             LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
                     else:
                         self.src_last_state.append(tf.concat([f, b], 1))
-                self.src_outputs = tf.concat([self.src_outputs[0], self.src_outputs[1]], axis=2)
+                self.src_outputs = tf.concat(
+                    [self.src_outputs[0], self.src_outputs[1]], axis=2)
 
             else:
                 self.logger.info("building encoder..")
@@ -212,7 +222,8 @@ class Q2VModel(object):
                     sequence_length=self.src_inputs_length, dtype=self.dtype,
                     time_major=False)
             # [batch_size, hidden unit]
-            self.src_last_output = self.extract_last_output(self.src_outputs, self.src_inputs_length - 1)
+            self.src_last_output = self.extract_last_output(
+                self.src_outputs, self.src_inputs_length - 1)
 
     def build_target_encoder(self, tgt_inputs, tgt_inputs_length):
         self.logger.info("building target encoder..")
@@ -226,7 +237,8 @@ class Q2VModel(object):
             if self.use_residual:
                 # Input projection layer to feed embedded inputs to the cell
                 # ** Essential when use_residual=True to match input/output dims
-                input_layer = Dense(self.hidden_units, dtype=self.dtype, name='input_projection')
+                input_layer = Dense(self.hidden_units,
+                                    dtype=self.dtype, name='input_projection')
 
                 # Embedded inputs having gone through input projection layer
                 tgt_inputs_embedded = input_layer(tgt_inputs_embedded)
@@ -250,7 +262,8 @@ class Q2VModel(object):
                             LSTMStateTuple(tf.concat([f.c, b.c], axis=1), tf.concat([f.h, b.h], axis=1)))
                     else:
                         tgt_last_state.append(tf.concat([f, b], 1))
-                tgt_outputs = tf.concat([tgt_outputs[0], tgt_outputs[1]], axis=2)
+                tgt_outputs = tf.concat(
+                    [tgt_outputs[0], tgt_outputs[1]], axis=2)
 
             else:
                 self.logger.info("building encoder..")
@@ -263,7 +276,8 @@ class Q2VModel(object):
                     sequence_length=tgt_inputs_length, dtype=self.dtype,
                     time_major=False)
 
-            tgt_last_output = self.extract_last_output(tgt_outputs, tgt_inputs_length - 1)
+            tgt_last_output = self.extract_last_output(
+                tgt_outputs, tgt_inputs_length - 1)
             return tgt_last_output
 
     @staticmethod
@@ -283,9 +297,12 @@ class Q2VModel(object):
 
     def cos_similarity_loss(self):
         labels = tf.cast(self.labels, self.dtype)
-        src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
-        tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
-        distance = tf.losses.cosine_distance(src_last_output_normalize, tgt_last_output_normalize, dim=1)
+        src_last_output_normalize = tf.nn.l2_normalize(
+            self.src_last_output, dim=1)
+        tgt_last_output_normalize = tf.nn.l2_normalize(
+            self.tgt_last_output, dim=1)
+        distance = tf.losses.cosine_distance(
+            src_last_output_normalize, tgt_last_output_normalize, dim=1)
         loss = tf.add(tf.multiply(labels, tf.maximum(1 - distance, 0)),
                       tf.multiply((1 - labels), tf.maximum(1 + distance, 0)))
         loss_mean = tf.reduce_mean(loss)
@@ -295,7 +312,8 @@ class Q2VModel(object):
         labels = tf.cast(self.labels, self.dtype)
         # src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
         # tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
-        distance = self.compute_euclidean_distance(self.src_last_output, self.tgt_last_output)
+        distance = self.compute_euclidean_distance(
+            self.src_last_output, self.tgt_last_output)
         loss_mean = tf.reduce_mean(distance)
         return loss_mean
 
@@ -313,26 +331,30 @@ class Q2VModel(object):
     def compute_cosine_distance(x, y):
         x_normalize = tf.nn.l2_normalize(x, dim=1)
         y_normalize = tf.nn.l2_normalize(y, dim=1)
-        distance = tf.losses.cosine_distance(x_normalize, y_normalize, dim=1, reduction='none')
+        distance = tf.losses.cosine_distance(
+            x_normalize, y_normalize, dim=1, reduction='none')
         return distance
-        # return tf.reduce_sum(tf.multiply(x_normalize, y), axis=1, keep_dims=True)
+        # return tf.reduce_sum(tf.multiply(x_normalize, y), axis=1,
+        # keep_dims=True)
 
     @staticmethod
     def compute_manhattan_distance(x, y):
         tf.subtract(x, y)
-        distance = tf.reduce_sum(tf.abs(tf.subtract(x, y)), reduction_indices=1)
+        distance = tf.reduce_sum(
+            tf.abs(tf.subtract(x, y)), reduction_indices=1)
         return distance
 
     def contrastive_loss(self):
-
         labels = tf.cast(self.labels, self.dtype)
         margin = tf.constant(5.)
         # Euclidean distance between x1,x2
-        distance = self.compute_euclidean_distance(self.src_last_output, self.tgt_last_output)
+        distance = self.compute_euclidean_distance(
+            self.src_last_output, self.tgt_last_output)
 
         # distance = tf.div(distance,
         #                 tf.add(tf.sqrt(tf.reduce_sum(tf.square(self.src_last_output), 1, keep_dims=True)),
-        #                        tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1, keep_dims=True))))
+        # tf.sqrt(tf.reduce_sum(tf.square(self.tgt_last_output), 1,
+        # keep_dims=True))))
 
         loss = tf.add(tf.multiply(labels, tf.square(distance)),
                       tf.multiply((1 - labels), tf.square(tf.nn.relu(margin - distance))))
@@ -346,7 +368,17 @@ class Q2VModel(object):
         return z
 
     @staticmethod
-    def custom_mat_dot_product(A, B):
+    def mat_extend_dot_product(A, B):
+        """
+        A: [batch_size, dim]
+        B: [batch_size, n * dim]
+        A mat_extend_dot_product B: [batch_size, n]
+        For example:
+        A: [[1,2], [3,4], [5,6]]
+        B: [[1,1,2,2,3,3,4,4],[2,2,3,3,4,4,5,5],[1,1,3,3,2,2,6,6]]
+        A mat_extend_dot_product B:
+        [[3,6,9,12],[14,21,28,35],[11,33,22,66]]
+        """
         dim = tf.shape(A)[1]
         ndim = tf.shape(B)[1]
         batch_size = tf.shape(B)[0]
@@ -357,23 +389,20 @@ class Q2VModel(object):
         C = tf.reshape(C, (batch_size, -1))
         return C
 
-    def l1_loss(self):
-        logits = self.custom_mat_dot_product(self.src_last_output, self.tgt_outputs)
+    def custom_loss(self):
+        logits = self.mat_extend_dot_product(
+            self.src_last_output, self.tgt_outputs)
         # logits_scaled = tf.nn.softmax(logits)
 
         # result2 = -tf.reduce_sum(self.labels * tf.log(logits_scaled), 1)
-        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.labels))
+        cross_entropy = tf.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.labels))
         return cross_entropy
 
     def init_loss(self):
 
         with tf.name_scope("loss"):
-            # self.loss = self.contrastive_loss_distance()
-            # self.loss = self.contrastive_loss()
-            # self.loss = self.cos_similarity_loss()
-            # self.loss = self.dot_product_loss()
-            # self.loss = self.cos_loss()
-            self.loss = self.l1_loss()
+            self.loss = self.custom_loss()
 
     def check_feeds(self, src_inputs, src_inputs_length, tgt_inputs, tgt_inputs_length, labels):
         """
@@ -422,7 +451,8 @@ class Q2VModel(object):
         if self.mode.lower() != 'train':
             raise ValueError("train step can only be operated in train mode")
 
-        input_feed = self.check_feeds(src_inputs, src_inputs_length, tgt_inputs, tgt_inputs_length, labels)
+        input_feed = self.check_feeds(
+            src_inputs, src_inputs_length, tgt_inputs, tgt_inputs_length, labels)
 
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = self.keep_prob
@@ -440,17 +470,21 @@ class Q2VModel(object):
         self.logger.info("setting optimizer..")
         # Gradients and SGD update operation for training the model
         if self.optimizer.lower() == 'adadelta':
-            self.opt = tf.train.AdadeltaOptimizer(learning_rate=self.learning_rate)
+            self.opt = tf.train.AdadeltaOptimizer(
+                learning_rate=self.learning_rate)
         elif self.optimizer.lower() == 'adam':
             self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
         elif self.optimizer.lower() == 'rmsprop':
-            self.opt = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
+            self.opt = tf.train.RMSPropOptimizer(
+                learning_rate=self.learning_rate)
         elif self.optimizer.lower == 'adagrad':
-            self.opt = tf.train.AdagradOptimizer(learning_rate=self.learning_rate)
+            self.opt = tf.train.AdagradOptimizer(
+                learning_rate=self.learning_rate)
         elif self.optimizer.lower() == 'cocob':
             self.opt = COCOB()
         else:
-            self.opt = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
+            self.opt = tf.train.GradientDescentOptimizer(
+                learning_rate=self.learning_rate)
 
         # Compute gradients of loss w.r.t. all trainable variables
 
@@ -463,11 +497,14 @@ class Q2VModel(object):
             grads_and_vars = self.opt.compute_gradients(loss=self.loss)
             gradients, variables = zip(*grads_and_vars)
         else:
-            gradients = tf.gradients(self.loss, tf.trainable_variables(), aggregation_method=2)
+            gradients = tf.gradients(
+                self.loss, tf.trainable_variables(), aggregation_method=2)
             variables = tf.trainable_variables()
 
-        clipped_gradients, _ = tf.clip_by_global_norm(gradients, self.max_gradient_norm)
-        self.updates = self.opt.apply_gradients(zip(clipped_gradients, variables), self.global_step)
+        clipped_gradients, _ = tf.clip_by_global_norm(
+            gradients, self.max_gradient_norm)
+        self.updates = self.opt.apply_gradients(
+            zip(clipped_gradients, variables), self.global_step)
 
         if self.job_name == "worker":
             self.init_token_op = self.opt.get_init_tokens_op()
@@ -508,10 +545,12 @@ class Q2VModel(object):
             self.src_inputs)
         src_inputs_length = tf.saved_model.utils.build_tensor_info(
             self.src_inputs_length)
-        src_last_output = tf.saved_model.utils.build_tensor_info(self.src_last_output)
+        src_last_output = tf.saved_model.utils.build_tensor_info(
+            self.src_last_output)
         signature_def = tf.saved_model.signature_def_utils.build_signature_def(inputs={'inputs': src_inputs, 'inputs_length': src_inputs_length},
-                                                                outputs={'src_last_output': src_last_output},
-                                                                method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME)
+                                                                               outputs={
+                                                                                   'src_last_output': src_last_output},
+                                                                               method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME)
         builder.add_meta_graph_and_variables(sess,
                                              [tf.saved_model.tag_constants.SERVING],
                                              signature_def_map={

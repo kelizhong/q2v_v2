@@ -12,6 +12,7 @@ from exception.resource_exception import ResourceNotFoundError
 
 
 class VocabularyHelper(object):
+
     def __init__(self, vocabulary_data_dir=None, vocabulary_name='vocab_newest',
                  words_freq_counter_name="words_freq_counter"):
         self.vocabulary_data_dir = vocabulary_data_dir or config('vocabulary_dir')

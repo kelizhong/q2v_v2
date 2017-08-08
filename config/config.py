@@ -51,5 +51,3 @@ tf.app.flags.DEFINE_string("dummy_model_name", tf_train['dummy_model_name'], "po
 tf.app.flags.DEFINE_boolean('export_model', tf_train['export_model'], 'export model')
 
 FLAGS = tf.app.flags.FLAGS
-
-

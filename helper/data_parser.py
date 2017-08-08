@@ -10,7 +10,15 @@ from helper.vocabulary_helper import VocabularyHelper
 
 
 class QueryPairParser(object):
+
     def __init__(self, vocab_data_dir=None):
+        """Parser for query pair data(positive and negative data)
+
+        Parameters
+        ----------
+        vocab_data_dir : {str}, optional
+            vocabulary for tokens (the default is None, for None, will load the vocabulary from config)
+        """
         self.tokenizer = TextBlobTokenizerHelper()
         vocab_data_dir = vocab_data_dir or config('vocabulary_dir')
         vocab_helper = VocabularyHelper(vocabulary_data_dir=vocab_data_dir)
@@ -18,6 +26,18 @@ class QueryPairParser(object):
         self.tokens_helper = TokensHelper(vocabulary=vocab, unk_token=config('_unk_', section='vocabulary_symbol'))
 
     def data_text_list_generator(self, files):
+        """Generator for the data text, exclude the label/weight, usually for building vocabulary
+
+        Parameters
+        ----------
+        files : {file list}
+            train data file list
+
+        Yields
+        ------
+        [list]
+            Text list with train data text
+        """
         for source, target_label_list in self.extract_train_data_generator(files):
             text = list()
             text.append(source)
@@ -34,32 +54,57 @@ class QueryPairParser(object):
 
     @staticmethod
     def extract_train_data(text):
+        """Extract train data
+
+        Parameters
+        ----------
+        text : {str}
+            one train data with format:
+            source\ttarget\tlabel/weight\ttarget\tlabel/weight...
+
+        Returns
+        -------
+        [tuple]
+            source, target_label_list((target, label/weight))
+        """
         line = re.sub(r'(?:^\(|\)$)', '', text)
         line = line.strip().lower()
         items = re.split(r'\t+', line)
+        # source
         source = items[0]
+        # positive and negative data (data, label/weight)
         items = items[1:]
         target_label_list = [(items[i], items[i+1]) for i in range(0, len(items), 2)]
         return source, target_label_list
 
-    def tokenize_data(self, text):
-        items = [] if text is None else text.split("\t")
-        tokens_list = list()
-        for item in items:
-            tokens = self.tokenize(item)
-            tokens_list.extend(tokens)
-        return tokens_list
-
-    def tokenize(self, text):
-        return self.tokenizer.tokenize(text)
-
     def siamese_sequences_to_tokens_generator(self, files, min_words=2):
+        """Generator for train data in siamese network
+
+        Parameters
+        ----------
+        files : {str}
+            files for train data
+        min_words : {number}, optional
+            ignore item with length < min_words (the default is 2)
+
+        Yields
+        ------
+        [tuple]
+            source_tokens, target_list, label_list
+
+        Raises
+        ------
+        ValueError
+            Column size
+        """
         samples = None
         for source, target_label_list in tqdm(self.extract_train_data_generator(files)):
             if samples is not None and samples != len(target_label_list):
                 raise ValueError("target column size not equal, %s:%s", samples, len(target_label_list))
             else:
+                # define target column size
                 samples = len(target_label_list)
+
             source_tokens = self.tokens_helper.tokens(source, return_data=False)
             if source_tokens is None or len(source_tokens) < min_words:
                 logging.warning("source %s is none or length is less than %d", source, min_words)

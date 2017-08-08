@@ -2,5 +2,6 @@
 
 
 class ResourceNotFoundError(Exception):
+
     def __init__(self, err="no resource are found"):
         Exception.__init__(self, err)

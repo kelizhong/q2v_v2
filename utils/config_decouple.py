@@ -81,6 +81,7 @@ class Config(object):
 
 
 class RepositoryBase(object):
+
     def __init__(self, source):
         raise NotImplementedError
 
@@ -140,6 +141,7 @@ class RepositoryEnv(RepositoryBase):
     """
     Retrieves option keys from .env files with fall back to os.environ.
     """
+
     def __init__(self, source):
         self.data = {}
 
@@ -163,6 +165,7 @@ class RepositoryShell(RepositoryBase):
     """
     Retrieves option keys from os.environ.
     """
+
     def __init__(self, source=None):
         pass
 
@@ -252,6 +255,7 @@ class Csv(object):
 
     def __call__(self, value):
         """The actual transformation"""
+
         transform = lambda s: self.cast(s.strip(self.strip))
 
         splitter = shlex(value, posix=True)

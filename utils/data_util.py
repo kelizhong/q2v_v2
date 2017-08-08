@@ -71,9 +71,3 @@ def prepare_train_batch(seqs, maxlen=None, dtype='int32'):
     for idx, s_x in enumerate(seqs):
         x[idx, :lengths[idx]] = s_x
     return x, lengths
-
-
-
-
-
-

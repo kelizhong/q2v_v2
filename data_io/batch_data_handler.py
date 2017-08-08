@@ -11,6 +11,9 @@ class BatchDataHandler(object):
     ----------
         batch_size: int
             Batch size for each data batch
+        enable_target: bool
+            True for train mode, False for encode mode
+
     """
 
     def __init__(self, batch_size, enable_target):
@@ -22,6 +25,15 @@ class BatchDataHandler(object):
 
     @property
     def data_object_length(self):
+        """return data object length
+
+        data object length equal to length of source token
+
+        Returns
+        -------
+        int
+            sources token length
+        """
         assert not self.enable_target or all([len(self._sources_token) == len(self._targets_list),
                                               len(self._sources_token) == len(
                                                   self._labels)]), "source shape:%d, target shape:%d, label shape:%d" % (
@@ -75,8 +87,12 @@ class BatchDataTrigramHandler(BatchDataHandler):
     ----------
         batch_size: int
             Batch size for each data batch
+        tokens_fn: function
+            funtion to convert word to token/id
         min_words: int
             ignore the source wit length less than `min_words`
+        enable_target: bool
+            True for train mode, False for encode mode
     """
 
     def __init__(self, batch_size, tokens_fn, min_words=2, enable_target=True):

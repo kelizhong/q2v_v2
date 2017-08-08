@@ -13,14 +13,28 @@ from utils.data_util import is_number
 
 @six.add_metaclass(abc.ABCMeta)
 class TokenizerBase(object):
+    """Tokenizer hlper base"""
 
     def text_normalization(self, text):
+        """Normalize text
+
+        Parameters
+        ----------
+        text : {text}
+            text to be normalized
+
+        Returns
+        -------
+        str
+            normalized text
+        """
         text = text.strip().lower()
         text = self.contractions(text)
         return text
 
     @staticmethod
     def contractions(text):
+        """Build contractions dict"""
         text_list = text.split()
         return_text_list = [CONTRACTION_MAP.get(w, w) for w in text_list]
         return_text = ' '.join(return_text_list)
@@ -57,6 +71,7 @@ class TokenizerBase(object):
 
 
 class WhitespaceTokenizerHelper(TokenizerBase):
+
     @lru_cache(maxsize=65535)
     def tokenize(self, text):
         text = text.strip().lower()
@@ -64,6 +79,7 @@ class WhitespaceTokenizerHelper(TokenizerBase):
 
 
 class TextBlobTokenizerHelper(TokenizerBase):
+
     def __init__(self, tokenizer=TreebankWordTokenizer, **kwargs):
         super(TextBlobTokenizerHelper, self).__init__()
         self.tokenizer = tokenizer()
@@ -86,6 +102,7 @@ class TextBlobTokenizerHelper(TokenizerBase):
 
 
 class NLTKTokenizerHelper(TokenizerBase):
+
     def __init__(self, tokenizer=word_tokenize, **kwargs):
         super(NLTKTokenizerHelper, self).__init__()
         self.tokenizer = tokenizer()
