@@ -2,16 +2,17 @@ import re
 import logging
 from tqdm import tqdm
 from utils.config_decouple import config
-from helper.tokenizer_helper import TextBlobTokenizerHelper
 from helper.tokens_helper import TokensHelper
 from utils.data_util import sentence_gen
 from utils.data_util import is_number
 from helper.vocabulary_helper import VocabularyHelper
 
+logger = logging.getLogger(__name__)
+
 
 class QueryPairParser(object):
 
-    def __init__(self, vocab_data_dir=None):
+    def __init__(self, vocab_data_dir=None, tokenize_fn=None):
         """Parser for query pair data(positive and negative data)
 
         Parameters
@@ -19,11 +20,10 @@ class QueryPairParser(object):
         vocab_data_dir : {str}, optional
             vocabulary for tokens (the default is None, for None, will load the vocabulary from config)
         """
-        self.tokenizer = TextBlobTokenizerHelper()
         vocab_data_dir = vocab_data_dir or config('vocabulary_dir')
         vocab_helper = VocabularyHelper(vocabulary_data_dir=vocab_data_dir)
         vocab = vocab_helper.load_vocabulary()
-        self.tokens_helper = TokensHelper(vocabulary=vocab, unk_token=config('_unk_', section='vocabulary_symbol'))
+        self.tokens_helper = TokensHelper(vocabulary=vocab, tokenize_fn=tokenize_fn, unk_token=config('_unk_', section='vocabulary_symbol'))
 
     def data_text_list_generator(self, files):
         """Generator for the data text, exclude the label/weight, usually for building vocabulary
@@ -50,7 +50,7 @@ class QueryPairParser(object):
                 data = self.extract_train_data(sentence)
                 yield data
             except Exception as e:
-                logging.error("Failed to extract query pair data %s", sentence, exc_info=True, stack_info=True)
+                logger.error("Failed to extract query pair data %s", sentence, exc_info=True, stack_info=True)
 
     @staticmethod
     def extract_train_data(text):
@@ -107,21 +107,21 @@ class QueryPairParser(object):
 
             source_tokens = self.tokens_helper.tokens(source, return_data=False)
             if source_tokens is None or len(source_tokens) < min_words:
-                logging.warning("source %s is none or length is less than %d", source, min_words)
+                logger.warning("source %s is none or length is less than %d", source, min_words)
                 continue
             target_list = list()
             label_list = list()
             for target, label in target_label_list:
                 target_tokens = self.tokens_helper.tokens(target, return_data=False)
                 if target_tokens is None or len(target_tokens) < min_words:
-                    logging.warning("target %s is none or length is less than %d", target, min_words)
+                    logger.warning("target %s is none or length is less than %d", target, min_words)
                     break
                 if label is None or not is_number(label):
-                    logging.warning("target label %s is none, or not a number", label)
+                    logger.warning("target label %s is none, or not a number", label)
                     break
                 target_list.append(target_tokens)
                 label_list.append(float(label))
             if len(target_list) == samples:
                 yield source_tokens, target_list, label_list
             else:
-                logging.warning("Failed to tokens target %s, may be the target not meet the select rule(min_words)", str(target_label_list))
+                logger.warning("Failed to tokens target %s, may be the target not meet the select rule(min_words)", str(target_label_list))

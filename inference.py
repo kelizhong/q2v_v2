@@ -1,5 +1,7 @@
 import os
 import sys
+import logging.config
+
 import heapq
 import pprint
 from collections import OrderedDict
@@ -8,6 +10,8 @@ import numpy as np
 from tensorflow.contrib.tensorboard.plugins import projector
 from tqdm import tqdm
 import h5py
+import yaml
+
 from utils.config_decouple import config
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.model_helper import create_model
@@ -18,6 +22,7 @@ from utils.data_util import prepare_train_batch
 from helper.tokenizer_helper import TextBlobTokenizerHelper
 from helper.tokens_helper import TokensHelper
 from helper.vocabulary_helper import VocabularyHelper
+from utils.file_util import ensure_dir_exists
 
 
 class Inference(object):
@@ -74,7 +79,7 @@ class Inference(object):
         proj_name: project name
 
         """
-        model_path = os.path.join(FLAGS.model_dir, 'visualize')
+        model_path = os.path.join(config('project_dir'), 'data', 'visualize')
         writer = tf.summary.FileWriter(model_path, self.sess.graph)
         proj_config = projector.ProjectorConfig()
         embed = proj_config.embeddings.add()
@@ -87,7 +92,7 @@ class Inference(object):
 
         sources_list = []
         embedding_list = []
-        h5f = h5py.File('q2v.h5', 'w')
+        h5f = h5py.File('%s.h5' % proj_name, 'w')
         # the left over elements that would be truncated by zip
         with tqdm(total=len(sources)) as pbar:
             for count, each in enumerate(zip(*[iter(sources)] * self.batch_size)):
@@ -107,13 +112,52 @@ class Inference(object):
             print('metadata file created')
 
         concat = np.concatenate(embedding_list, axis=0)
-        h5f.create_dataset('q2v', data=concat)
+        h5f.create_dataset(proj_name, data=concat)
         item_size, unit_size = concat.shape
         item_embedding = tf.get_variable(embed.tensor_name, [item_size, unit_size])
         assign_op = item_embedding.assign(concat)
         self.sess.run(assign_op)
         saver = tf.train.Saver([item_embedding])
         saver.save(self.sess, os.path.join(model_path, "%s.embs" % proj_name))
+
+    def vectorization(self, file, proj_name="q2v"):
+        """
+        encode the sequences in file to vector and store in model to visualize them in tensorboard
+        Parameters
+        ----------
+        file: file contains sequences
+        tensor_name: embedding tensorf name
+        proj_name: project name
+
+        """
+        sources = set(map(str.strip, open(file)))
+
+        sources_list = []
+        embedding_list = []
+        vector_path = os.path.join(config('project_dir'), 'data', 'vectorization')
+        ensure_dir_exists(vector_path)
+        h5_path = os.path.join(vector_path, "%s.h5" % proj_name)
+        h5f = h5py.File(h5_path, 'w')
+        # the left over elements that would be truncated by zip
+        with tqdm(total=len(sources)) as pbar:
+            for count, each in enumerate(zip(*[iter(sources)] * self.batch_size)):
+                batch_sources, result = self.encode(each)
+                if result is not None:
+                    sources_list.extend(batch_sources)
+                    embedding_list.append(result)
+                pbar.update(self.batch_size)
+                if count * self.batch_size > self.max_sequences:
+                    print("Have reached to the max sequence %d" % self.max_sequences)
+                    break
+
+        meta_path = os.path.join(vector_path, "%s.tsv" % proj_name)
+        with open(meta_path, 'w+') as item_file:
+            item_file.write('id\tchar\n')
+            for i, each in enumerate(sources_list):
+                item_file.write('{}\t{}\n'.format(i, each))
+            print('metadata file created')
+        concat = np.concatenate(embedding_list, axis=0)
+        h5f.create_dataset(proj_name, data=concat)
 
     @property
     @memoized
@@ -141,12 +185,22 @@ class Inference(object):
                     pprint.pprint(heapq.nlargest(len(h), h))
 
 
+def setup_logger():
+    logging_config_path = config('logging_config_path')
+    with open(logging_config_path) as f:
+        dictcfg = yaml.load(f)
+        logging.config.dictConfig(dictcfg)
+
+
 def main(_):
+    setup_logger()
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     tf_config = OrderedDict(sorted(FLAGS.__flags.items()))
-    i = Inference(batch_size=1, tf_config=tf_config)
-    i.visualize('./data/rawdata/query_sample_inference')
+    i = Inference(batch_size=1024, tf_config=tf_config)
+    # i.visualize('./data/rawdata/query_sample_inference')
     # i.nearest("women grey nike shoes", './data/rawdata/query_inference', 10)
+    # i.nearest("Microsoft Windows 10 Home USB Flash Drive", './data/rawdata/query_inference', 50)
+    i.vectorization('./data/rawdata/query_inference')
 
 
 if __name__ == "__main__":

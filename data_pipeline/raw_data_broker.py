@@ -4,6 +4,8 @@ import logging
 import zmq
 from zmq.devices import ProcessDevice
 
+logger = logging.getLogger(__name__)
+
 
 class RawDataBroker(object):
 
@@ -28,7 +30,6 @@ class RawDataBroker(object):
         self.frontend_port = frontend_port
         self.backend_port = backend_port
         self.name = name
-        self.logger = logging.getLogger("data")
 
     def run(self):
         """start device that will be run in a background Process."""
@@ -39,7 +40,7 @@ class RawDataBroker(object):
         dev.setsockopt_in(zmq.IDENTITY, b'PULL')
         dev.setsockopt_out(zmq.IDENTITY, b'PUSH')
         dev.start()
-        self.logger.info(
+        logger.info(
             "start broker %s, ip:%s, frontend port:%d, backend port:%d",
             self.name, self.ip, self.frontend_port, self.backend_port)
 

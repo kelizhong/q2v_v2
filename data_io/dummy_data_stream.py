@@ -1,5 +1,6 @@
 from data_io.batch_data_handler import BatchDataTrigramHandler
 from helper.data_parser import QueryPairParser
+from helper.tokenizer_helper import TextBlobTokenizerHelper
 
 
 class DummyDataStream(object):
@@ -27,7 +28,8 @@ class DummyDataStream(object):
         data object
             Including source tokens, target toekns, labels
         """
-        parser = QueryPairParser()
+        tokenize_fn = TextBlobTokenizerHelper().tokenize()
+        parser = QueryPairParser(tokenize_fn=tokenize_fn)
         for num, (source_tokens, target_list, label_list) in enumerate(
                 parser.siamese_sequences_to_tokens_generator(self.raw_data_path)):
             self.batch_data.insert_data_object(None, source_tokens, target_list, label_list)

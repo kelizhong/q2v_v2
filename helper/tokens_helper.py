@@ -7,6 +7,17 @@ class TokensHelper(object):
     """Convert word to id"""
 
     def __init__(self, vocabulary, tokenize_fn=None, **kwargs):
+        """Convert word/item to token/id
+
+        Parameters
+        ----------
+        vocabulary : {dict}
+            vocabulary dictionary
+        **kwargs : {keyword arg}
+            unk_token keyword
+        tokenize_fn : {function}, optional
+            tokenizer function(the default is tokenizer split content by whitespace)
+        """
         self.vocabulary = vocabulary
         self.tokenize = tokenize_fn or WhitespaceTokenizerHelper().tokenize
         self.kwargs = kwargs
@@ -24,6 +35,7 @@ class TokensHelper(object):
     def words_index_lookup(self, words_list, vocabulary):
         if not isinstance(words_list, list):
             words_list = [words_list]
+        # TODO unk_token should be in the kwargs, add default value or exception thrown
         words_index = [vocabulary[d] if d in vocabulary else self.kwargs.get('unk_token') for d in words_list]
         return words_index
 

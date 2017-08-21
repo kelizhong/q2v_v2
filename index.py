@@ -35,7 +35,8 @@ client = ThriftClientHelper(host=config('host', section='nmslib_thrift'), port=c
 
 tf_serving_client = TFServingClientHelper(tf_serving_host, tf_serving_port)
 
-meta = dict((line.strip().split('\t') for line in open(os.path.join(config('rawdata_dir'), 'q2v.tsv'))))
+meta = dict((line.strip().split('\t') for line in open(os.path.join(config('vectorization_dir'), 'q2v.tsv'))))
+print("Finsih")
 
 
 def make_inference_request(inputs):
@@ -85,4 +86,4 @@ if __name__ == '__main__':
     """Simple version to get nearest queries
     TODO: enhance it and comment it lot
     """
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=8000)

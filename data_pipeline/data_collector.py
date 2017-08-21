@@ -1,12 +1,10 @@
 # coding=utf-8
 """Collect the tokenize sentence from worker"""
+import os
 import logging
 import zmq
 import itertools
-import time
-import tempfile
 from utils.config_decouple import config
-from utils.appmetric_util import with_meter
 from utils.retry_util import retry
 from utils.appmetric_util import AppMetric
 
@@ -15,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class DataCollectorProcess(object):
 
-    def __init__(self, ip='127.0.0.1', port=5557, tries=20, metric_interval=60, name="Collector"):
+    def __init__(self, ip='127.0.0.1', port=5557, tries=20, metric_interval=5, file_suffix="default", name="Collector"):
         """Collect the tokenized data from worker
 
         Parameters
@@ -38,12 +36,12 @@ class DataCollectorProcess(object):
         self.port = port
         self.tries = tries
         self.metric_interval = metric_interval
+        self.file_suffix = file_suffix
         self.name = name
         self._init_writer_handler()
 
     @retry(lambda x: x.tries, exception=zmq.ZMQError,
-           name="data_collector", report=logger.error)
-    @with_meter('data_collector', interval=60)
+           name="DataCollector", report=logger.error)
     def _on_recv(self, receiver):
         """Receive the py object from zmq
 
@@ -61,13 +59,10 @@ class DataCollectorProcess(object):
         return data_item_str, parsed_data_str
 
     def _init_writer_handler(self):
-        self.raw_handler = tempfile.NamedTemporaryFile(suffix='_%s' % time.strftime("%Y%m%d%H%M%S"),
-                                                       prefix='train_data_raw_',
-                                                       dir=config('rawdata_dir'),
-                                                       delete=False, mode='w', encoding="utf-8")
-        self.parsed_handler = tempfile.NamedTemporaryFile(
-            suffix='_%s' % time.strftime("%Y%m%d%H%M%S"), prefix='train_data_parsed_', dir=config('rawdata_dir'), delete=False,
-            mode='w', encoding="utf-8")
+        raw_file_path = os.path.join(config('rawdata_dir'), "train_data_raw_{}".format(self.file_suffix))
+        self.raw_handler = open(raw_file_path, mode='w', encoding="utf-8")
+        parsed_file_path = os.path.join(config('rawdata_dir'), "train_data_parsed_{}".format(self.file_suffix))
+        self.parsed_handler = open(parsed_file_path, mode='w', encoding="utf-8")
 
     def collect(self):
         """Generator that receive the tokenize sentence from worker and produce the words"""

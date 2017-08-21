@@ -1,42 +1,48 @@
 import time
 import argparse
 import logging.config
+import random
 from multiprocessing import Value
 import yaml
+import boto3
+
 from utils.config_decouple import config
 from utils.network_util import local_ip
+from utils.common_util import split_list
 from argparser.customArgAction import AppendTupleWithoutDefault
 from data_pipeline.raw_data_broker import RawDataBroker
 from data_pipeline.data_parser_worker import DataParserWorker
 from data_pipeline.raw_data_ventilator import DataVentilatorProcess
 from data_pipeline.data_collector import DataCollectorProcess
+from utils.socket_util import select_random_port
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate train data')
 
-    parser.add_argument('-fp', '--file-patterns', nargs=1, action=AppendTupleWithoutDefault,
-                        default=['*add', '*search', '*click', '*purchase'])
+    parser.add_argument('-sp', '--s3-prefix', nargs=2, action=AppendTupleWithoutDefault,
+                        default=[('*add', 1), ('*search', 1), ('*click', 1), ('*purchase', 1)])
     parser.add_argument('--ip', type=str, help='ip address', default=None)
-    parser.add_argument('--port', type=str, help='zmq port')
     parser.add_argument('-w', '--worker-num', default=4, type=int,
                         help='number of parser worker')
-    parser.add_argument('--rawdata-frontend-port', default=5555, type=int,
-                        help='train rawdata frontend port')
-    parser.add_argument('--rawdata-backend-port', default=5556, type=int,
-                        help='train rawdata backend port')
-    parser.add_argument('--collector-frontend-port', default=5557, type=int,
-                        help='collector frontend port')
+    parser.add_argument('-fs', '--file-suffix', type=str, help='parsed train data file name', default="default")
+    parser.add_argument('-b', '--bucket', type=str, help='s3 bucket for query2vec data', default='q2vdata')
 
     return parser.parse_args()
 
 
-def start_data_ventilator_process(ip, port, file_patterns, build_item_dict_status):
+def start_data_ventilator_process(ip, port, s3_bucket, s3_prefixes):
     """start the ventilator process which read the corpus data"""
-    for i, file_pattern in enumerate(file_patterns):
-        ventilator = DataVentilatorProcess(file_pattern, build_item_dict_status, ip=ip, port=port, name="data_ventilator_{}".format(i))
-        ventilator.daemon = True
-        ventilator.start()
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(name=s3_bucket)
+    i = 0
+    for s3_prefix, porcess_num in s3_prefixes:
+        s3_uri_lst = ['s3://{0}/{1}'.format(bucket.name, obj.key) for obj in bucket.objects.filter(Prefix=s3_prefix)]
+        for s3_uris in split_list(s3_uri_lst, int(porcess_num)):
+            ventilator = DataVentilatorProcess(s3_uris, ip=ip, port=port, name="data_ventilator_{}".format(i))
+            ventilator.daemon = True
+            ventilator.start()
+            i += 1
 
 
 def start_raw_data_broker(ip='127.0.0.1', frontend_port=5555, backend_port=5556):
@@ -82,29 +88,22 @@ if __name__ == '__main__':
     ip : {str}, optional
         The ip address string without the port to pass to ``Socket.bind()``.
         (the default is None, for None ip, will get ip automatically)
-    rawdata_frontend_port : {number}, optional
-        raw data broker frontend port (the default is 5555)
-    rawdata_backend_port : {number}, optional
-        raw data broker backend port (the default is 5556)
-    collector_fronted_port : {number}, optional
-        collector port (the default is 5557)
     """
     args = parse_args()
     setup_logger()
     ip = args.ip or local_ip()
-    # ip = '127.0.0.1'
-    # True, when finish item dict building
-    build_item_dict_status = Value('d', False)
-    period = 60
 
-    start_data_ventilator_process(ip=ip, port=args.rawdata_frontend_port, file_patterns=args.file_patterns, build_item_dict_status=build_item_dict_status)
+    rawdata_frontend_port = select_random_port()
 
-    start_raw_data_broker(ip=ip, frontend_port=args.rawdata_frontend_port, backend_port=args.rawdata_backend_port)
+    rawdata_backend_port = select_random_port()
 
-    start_parser_worker_process(ip=ip, frontend_port=args.rawdata_backend_port,
-                                backend_port=args.collector_frontend_port, worker_num=args.worker_num)
-    while not build_item_dict_status.value:
-        # waiting ventiliator to build item dict
-        time.sleep(period)
-    collector = DataCollectorProcess(ip=ip, port=args.collector_frontend_port)
+    start_raw_data_broker(ip=ip, frontend_port=rawdata_frontend_port, backend_port=rawdata_backend_port)
+
+    start_data_ventilator_process(ip=ip, port=rawdata_frontend_port, s3_bucket=args.bucket, s3_prefixes=args.s3_prefix)
+
+    collector_frontend_port = select_random_port()
+
+    start_parser_worker_process(ip=ip, frontend_port=rawdata_backend_port,
+                                backend_port=collector_frontend_port, worker_num=args.worker_num)
+    collector = DataCollectorProcess(ip=ip, port=collector_frontend_port, file_suffix=args.file_suffix)
     collector.collect()

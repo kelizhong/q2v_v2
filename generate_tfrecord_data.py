@@ -9,8 +9,8 @@ import logging.config
 import yaml
 from utils.config_decouple import config
 from helper.data_record_helper import DataRecordHelper
-
 from helper.data_parser import QueryPairParser
+from utils.file_util import ensure_dir_exists
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate tf records files')
 
-    parser.add_argument('-tp', '--tfrecord-path', type=str, default=os.path.join(config('traindata_dir'), 'train.tfrecords'),
-                                  help='path for tfrecord train data')
+    parser.add_argument('-fs', '--file-suffix', type=str, help='suffix for tfrecord train data', default="default")
+
     parser.add_argument('-mw', '--min-words', type=int, default=2, help='ignore the sequence that length < min_words')
     parser.add_argument('file_pattern', type=str, help='the corpus input files pattern')
 
@@ -46,4 +46,6 @@ if __name__ == "__main__":
     files = glob.glob(args.file_pattern)
     d = DataRecordHelper()
     gen = parser.siamese_sequences_to_tokens_generator(files, args.min_words)
-    d.create_sequence(gen, record_path=args.tfrecord_path)
+    tfrecord_path = os.path.join(config('traindata_dir'), "train.tfrecords.{}".format(args.file_suffix))
+    ensure_dir_exists(tfrecord_path, is_dir=False)
+    d.create_sequence(gen, record_path=tfrecord_path)

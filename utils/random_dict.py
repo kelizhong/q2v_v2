@@ -5,12 +5,15 @@ import numpy as np
 class RandomDict(MutableMapping):
 
     def __init__(self, *args, **kwargs):
-        """ Create RandomDict object with contents specified by arguments.
-        Any argument
-        :param *args:       dictionaries whose contents get added to this dict
-        :param **kwargs:    key, value pairs will be added to this dict
+        """Create RandomDict object with contents specified by arguments.
+
+        Parameters
+        ----------
+        *args :
+            dictionaries whose contents get added to this dict
+        **kwargs :
+            key, value pairs will be added to this dict
         """
-        # mapping of keys to array positions
         self.keys = {}
         self.values = []
         self.last_index = -1

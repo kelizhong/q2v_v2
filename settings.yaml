@@ -1,10 +1,11 @@
 ---
 settings:
     # project_dir: &project_dir /home/ec2-user/q2v/v4/0803_sync
-    project_dir: &project_dir /Users/keliz/PycharmProjects/q2v_v4
+    project_dir: &project_dir /home/ec2-user/q2v/v4/0818
     rawdata_dir: !!python/object/apply:os.path.join [*project_dir, data/rawdata]
     traindata_dir: &traindata_dir !!python/object/apply:os.path.join [*project_dir, data/traindata]
     vocabulary_dir: !!python/object/apply:os.path.join [*project_dir, data/vocabulary]
+    vectorization_dir: !!python/object/apply:os.path.join [*project_dir, data/vectorization]
     logging_config_path: !!python/object/apply:os.path.join [*project_dir, config/logging.yaml]
 
 # do not change it
@@ -23,7 +24,7 @@ tf_train:
     gpu: null
     tfrecord_train_file: !!python/object/apply:os.path.join [*traindata_dir, train.tfrecords]
     debug: false
-    label_size: 4 # How many target samples in one example
+    label_size: 5 # How many target samples in one example
     batch_size: 128 # Batch size to use during training(positive pair count based).
 
     # Model parameters
@@ -39,7 +40,7 @@ tf_train:
     optimizer: cocob # Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)
     max_gradient_norm: 5.0 # Clip gradients to this norm.
 
-    model_export_path: !!python/object/apply:os.path.join [*project_dir, data/serving]
+    model_export_path: !!python/object/apply:os.path.join [*project_dir, data/serving, *model_name]
     learning_rate: 0.1 # learning rate
     min_learning_rate: 0.0002 # minimum Learning rate
     decay_steps: 10000 # how many steps to update the learning rate.
@@ -65,7 +66,7 @@ tf_serving:
     host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
     port: 9000  # gRPC server port
     model_name: q2v # TensorFlow model name
-    model_version: 1 # TensorFlow model version
+    model_version: 104026 # TensorFlow model version
     timeout: 10.0 # Timeout of gRPC request
 
 gprc_retry:
@@ -79,5 +80,9 @@ gprc_retry:
 nmslib_thrift:
     host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
     port: 10000  # gRPC server port
+
+asin_title_ardb:
+    host: 127.0.0.1
+    port: 16379
 
 

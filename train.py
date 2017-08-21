@@ -39,6 +39,8 @@ from helper.vocabulary_helper import VocabularyHelper
 from utils.data_util import prepare_train_pair_batch
 from utils.decorator_util import memoized
 
+logger = logging.getLogger("model")
+
 
 class Trainer(object):
 
@@ -57,7 +59,6 @@ class Trainer(object):
         self.max_vocabulary_size = self.vocabulary_size
         self.tfrecord_train_file = tf_config['tfrecord_train_file']
         self.model_export_path = tf_config['model_export_path']
-        self.logger = logging.getLogger("model")
         # add max vocabulary size to config
         tf_config['max_vocabulary_size'] = self.vocabulary_size
         self.dummy_model_dir = tf_config['dummy_model_dir']
@@ -123,14 +124,16 @@ class Trainer(object):
         return device
 
     def _log_variable_info(self):
+        for attribute, value in self.tf_config.items():
+            logger.info("%s : %s", attribute, value)
         tensor_memory = defaultdict(int)
         for item in tf.global_variables():
-            self.logger.info("variable:%s, device:%s", item.name, item.device)
+            logger.info("variable:%s, device:%s", item.name, item.device)
         # TODO int32 and float32, dtype?
         for item in tf.trainable_variables():
             tensor_memory[item.device] += int(np.prod(item.shape))
         for key, value in tensor_memory.items():
-            self.logger.info("device: %s, memory:%s", key, value)
+            logger.info("device: %s, memory:%s", key, value)
 
     def build_model(self, model_dir):
         with tf.Session(target=self.master,
@@ -176,7 +179,7 @@ class Trainer(object):
                     avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
                     words_per_sec = words_done / step_time / self.display_freq
                     sents_per_sec = sents_done / step_time / self.display_freq
-                    self.logger.info(
+                    logger.info(
                         "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
                         (global_step, model.learning_rate.eval(), step_time, step_loss, avg_loss,
                          avg_perplexity,
@@ -189,12 +192,12 @@ class Trainer(object):
         if self.job_name == "ps":
             self.server.join()
         else:
+            self._log_variable_info()
             file_list = glob.glob(self.tfrecord_train_file)
             record = DataRecordHelper()
             source_batch_data, source_batch_length, targets_batch_data, targets_batch_length, label_batch = record.get_padded_batch(
                 file_list, batch_size=self.batch_size, label_size=self.label_size)
             model = self.build_model(self.model_dir)
-            self._log_variable_info()
             init_op = tf.global_variables_initializer()
             sv = tf.train.Supervisor(is_chief=(self.task_index == 0),
                                      logdir=self.model_dir,
@@ -242,13 +245,13 @@ class Trainer(object):
                             avg_perplexity = math.exp(float(avg_loss)) if avg_loss < 300 else float("inf")
                             words_per_sec = words_done / step_time / self.display_freq
                             sents_per_sec = sents_done / step_time / self.display_freq
-                            self.logger.info(
+                            logger.info(
                                 "global step %d, learning rate %.8f, step-time:%.2f, step-loss:%.8f, avg-loss:%.8f, perplexity:%.4f, %.4f sents/s, %.4f words/s" %
                                 (global_step, model.learning_rate.eval(), step_time, step_loss, avg_loss, avg_perplexity, sents_per_sec, words_per_sec))
                             # set zero timer and loss.
                             words_done, sents_done = 0.0, 0.0
                 except tf.errors.OutOfRangeError:
-                    self.logger.info('Finished training.')
+                    logger.info('Finished training.')
                 finally:
                     coord.request_stop()
             sv.stop()
@@ -273,7 +276,7 @@ def main(_):
     if FLAGS.use_dummy:
         trainer.dummy_train()
     elif FLAGS.export_model:
-        trainer.export_model(tf_config['dummy_model_dir'])
+        trainer.export_model(tf_config['model_dir'])
     else:
         trainer.train()
 

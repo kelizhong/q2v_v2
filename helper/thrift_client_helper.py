@@ -1,5 +1,3 @@
-
-
 import contextlib
 import logging
 import socket
@@ -74,17 +72,15 @@ class ConnectionPool(object):
     """
     Thread-safe connection pool.
 
-    .. versionadded:: 0.5
 
     The `size` argument specifies how many connections this pool
-    manages. Additional keyword arguments are passed unmodified to the
-    :py:class:`happybase.Connection` constructor, with the exception of
-    the `autoconnect` argument, since maintaining connections is the
-    task of the pool.
-
-    :param int size: the maximum number of concurrently open connections
-    :param kwargs: keyword arguments passed to
-                   :py:class:`happybase.Connection`
+    manages.
+    Parameters
+    ----------
+    size: {int}
+        the maximum number of concurrently open connections
+    kwargs:
+        keyword arguments passed to
     """
 
     def __init__(self, size, **kwargs):
@@ -145,7 +141,6 @@ class ConnectionPool(object):
 
         :param int timeout: number of seconds to wait (optional)
         :return: active connection from the pool
-        :rtype: :py:class:`happybase.Connection`
         """
 
         connection = getattr(self._thread_connections, 'current', None)
@@ -201,16 +196,15 @@ class NoConnectionsAvailable(RuntimeError):
     This happens if a timeout was specified when obtaining a connection,
     and no connection became available within the specified timeout.
 
-    .. versionadded:: 0.5
     """
     pass
 
 
 class Connection(object):
-    """Connection to an HBase Thrift server.
+    """Connection to an Thrift server.
 
     The `host` and `port` arguments specify the host name and TCP port
-    of the HBase Thrift server to connect to. If omitted or ``None``,
+    of the Thrift server to connect to. If omitted or ``None``,
     a connection to the default port on ``localhost`` is made. If
     specifed, the `timeout` argument specifies the socket timeout in
     milliseconds.
@@ -219,30 +213,12 @@ class Connection(object):
     directly, otherwise :py:meth:`Connection.open` must be called
     explicitly before first use.
 
-    The optional `table_prefix` and `table_prefix_separator` arguments
-    specify a prefix and a separator string to be prepended to all table
-    names, e.g. when :py:meth:`Connection.table` is invoked. For
-    example, if `table_prefix` is ``myproject``, all tables tables will
-    have names like ``myproject_XYZ``.
-
     The optional `compat` argument sets the compatibility level for
-    this connection. Older HBase versions have slightly different Thrift
+    this connection. Older  versions have slightly different Thrift
     interfaces, and using the wrong protocol can lead to crashes caused
     by communication errors, so make sure to use the correct one. This
     value can be either the string ``0.90``, ``0.92``, ``0.94``, or
     ``0.96`` (the default).
-
-    The optional `transport` argument specifies the Thrift transport
-    mode to use. Supported values for this argument are ``buffered``
-    (the default) and ``framed``. Make sure to choose the right one,
-    since otherwise you might see non-obvious connection errors or
-    program hangs when making a connection. HBase versions before 0.94
-    always use the buffered transport. Starting with HBase 0.94, the
-    Thrift server optionally uses a framed transport, depending on the
-    argument passed to the ``hbase-daemon.sh start thrift`` command.
-    The default ``-threadpool`` mode uses the buffered transport; the
-    ``-hsha``, ``-nonblocking``, and ``-threadedselector`` modes use the
-    framed transport.
 
     The optional `protocol` argument specifies the Thrift transport
     protocol to use. Supported values for this argument are ``binary``
@@ -250,33 +226,19 @@ class Connection(object):
     since otherwise you might see non-obvious connection errors or
     program hangs when making a connection. ``TCompactProtocol`` is
     a more compact binary format that is  typically more efficient to
-    process as well. ``TBinaryProtocol`` is the default protocol that
-    Happybase uses.
+    process as well.
 
-    .. versionadded:: 0.9
-       `protocol` argument
-
-    .. versionadded:: 0.5
-       `timeout` argument
-
-    .. versionadded:: 0.4
-       `table_prefix_separator` argument
-
-    .. versionadded:: 0.4
-       support for framed Thrift transports
 
     :param str host: The host to connect to
     :param int port: The port to connect to
     :param int timeout: The socket timeout in milliseconds (optional)
     :param bool autoconnect: Whether the connection should be opened directly
-    :param str table_prefix: Prefix used to construct table names (optional)
-    :param str table_prefix_separator: Separator used for `table_prefix`
     :param str compat: Compatibility mode (optional)
     :param str transport: Thrift transport mode (optional)
     """
+
     def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT, timeout=None,
-                 autoconnect=True, table_prefix=None,
-                 table_prefix_separator=b'_',
+                 autoconnect=True,
                  transport=DEFAULT_TRANSPORT, protocol=DEFAULT_PROTOCOL):
 
         if transport not in THRIFT_TRANSPORTS:
@@ -292,8 +254,6 @@ class Connection(object):
         self.host = host or DEFAULT_HOST
         self.port = port or DEFAULT_PORT
         self.timeout = timeout
-        self.table_prefix = table_prefix
-        self.table_prefix_separator = table_prefix_separator
 
         self._transport_class = THRIFT_TRANSPORTS[transport]
         self._protocol_class = THRIFT_PROTOCOLS[protocol]
@@ -318,7 +278,7 @@ class Connection(object):
         self.client = QueryService.Client(protocol)
 
     def open(self):
-        """Open the underlying transport to the HBase instance.
+        """Open the underlying transport to the instance.
 
         This method opens the underlying Thrift transport (TCP connection).
         """
@@ -329,7 +289,7 @@ class Connection(object):
         self.transport.open()
 
     def close(self):
-        """Close the underyling transport to the HBase instance.
+        """Close the underyling transport to the  instance.
 
         This method closes the underlying Thrift transport (TCP connection).
         """

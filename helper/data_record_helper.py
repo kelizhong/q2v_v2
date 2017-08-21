@@ -18,6 +18,7 @@ class DataRecordHelper(object):
     @staticmethod
     def create_record_example(source, targets, label):
         """create source taget examle
+        # TODO change label to weight
 
         Parameters
         ----------
@@ -50,6 +51,8 @@ class DataRecordHelper(object):
 
     def get_padded_batch(self, file_list, batch_size, label_size, queue_capacity=2048, num_enqueuing_threads=4):
         """Get padded batch
+
+        # TODO change label to weight
 
         Parameters
         ----------

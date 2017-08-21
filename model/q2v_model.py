@@ -1,12 +1,14 @@
 # coding=utf-8
+import logging
 import tensorflow as tf
 from tensorflow.python.layers.core import Dense
 from tensorflow.python.ops.rnn_cell import GRUCell
 from tensorflow.python.ops.rnn_cell import LSTMCell, LSTMStateTuple
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
-import logging
 from external.optimizer.cocob_optimizer import COCOB
+
+logger = logging.getLogger("model")
 
 
 class Q2VModel(object):
@@ -16,7 +18,6 @@ class Q2VModel(object):
         assert mode.lower() in ['train', 'decode', 'encode', 'export']
 
         self.config = config
-        self.logger = logging.getLogger("model")
         self.mode = mode.lower()
 
         self.job_name = config['job_name']
@@ -61,7 +62,7 @@ class Q2VModel(object):
         self.saver = tf.train.Saver(tf.global_variables())
 
     def build_model(self):
-        self.logger.info("building model..")
+        logger.info("building model..")
         self.init_placeholders()
         self._init_embedding_layer()
         self.build_source_encoder()
@@ -168,7 +169,7 @@ class Q2VModel(object):
                                                   dtype=self.dtype)
 
     def build_source_encoder(self):
-        self.logger.info("building source encoder..")
+        logger.info("building source encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype) as scope:
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
@@ -187,7 +188,7 @@ class Q2VModel(object):
                 src_inputs_embedded = input_layer(src_inputs_embedded)
 
             if self.bidirectional:
-                self.logger.info("building bidirectional encoder..")
+                logger.info("building bidirectional encoder..")
                 self.fw_encoder_cell = self.build_encoder_cell()
                 self.bw_encoder_cell = self.build_encoder_cell()
                 self.src_outputs, self.src_last_state = tf.nn.bidirectional_dynamic_rnn(
@@ -211,7 +212,7 @@ class Q2VModel(object):
                     [self.src_outputs[0], self.src_outputs[1]], axis=2)
 
             else:
-                self.logger.info("building encoder..")
+                logger.info("building encoder..")
                 # Building encoder_cell
                 self.encoder_cell = self.build_encoder_cell()
                 # Encode input sequences into context vectors:
@@ -226,7 +227,7 @@ class Q2VModel(object):
                 self.src_outputs, self.src_inputs_length - 1)
 
     def build_target_encoder(self, tgt_inputs, tgt_inputs_length):
-        self.logger.info("building target encoder..")
+        logger.info("building target encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
 
             # Embedded_inputs: [batch_size, time_step, embedding_size]
@@ -244,7 +245,7 @@ class Q2VModel(object):
                 tgt_inputs_embedded = input_layer(tgt_inputs_embedded)
 
             if self.bidirectional:
-                self.logger.info("building bidirectional encoder..")
+                logger.info("building bidirectional encoder..")
                 tgt_outputs, tgt_last_state = tf.nn.bidirectional_dynamic_rnn(
                     cell_fw=self.fw_encoder_cell, cell_bw=self.bw_encoder_cell,
                     inputs=tgt_inputs_embedded,
@@ -266,7 +267,7 @@ class Q2VModel(object):
                     [tgt_outputs[0], tgt_outputs[1]], axis=2)
 
             else:
-                self.logger.info("building encoder..")
+                logger.info("building encoder..")
                 # Building encoder_cell
                 # Encode input sequences into context vectors:
                 # encoder_outputs: [batch_size, max_time_step, cell_output_size]
@@ -467,7 +468,7 @@ class Q2VModel(object):
         """
         Builds graph to minimize loss function.
         """
-        self.logger.info("setting optimizer..")
+        logger.info("setting optimizer..")
         # Gradients and SGD update operation for training the model
         if self.optimizer.lower() == 'adadelta':
             self.opt = tf.train.AdadeltaOptimizer(
@@ -539,7 +540,7 @@ class Q2VModel(object):
         return outputs[0]  # encode: [batch_size, cell.output_size]
 
     def export(self, sess, export_path):
-        logging.info('Exporting trained model to %s', export_path)
+        logger.info('Exporting trained model to %s', export_path)
         builder = tf.saved_model.builder.SavedModelBuilder(export_path)
         src_inputs = tf.saved_model.utils.build_tensor_info(
             self.src_inputs)
@@ -558,4 +559,4 @@ class Q2VModel(object):
                                              }
                                              )
         builder.save()
-        logging.info("Done exporting!")
+        logger.info("Done exporting!")
