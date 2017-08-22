@@ -6,6 +6,7 @@ settings:
     traindata_dir: &traindata_dir !!python/object/apply:os.path.join [*project_dir, data/traindata]
     vocabulary_dir: !!python/object/apply:os.path.join [*project_dir, data/vocabulary]
     vectorization_dir: !!python/object/apply:os.path.join [*project_dir, data/vectorization]
+    visualization_dir: !!python/object/apply:os.path.join [*project_dir, data/vectorization]
     logging_config_path: !!python/object/apply:os.path.join [*project_dir, config/logging.yaml]
 
 # do not change it
@@ -15,7 +16,7 @@ vocabulary_symbol: &vocabulary_symbol
     _num_: 2 # number_token
     _punc_: 3 # punc_token
 
-tf_train:
+tf_train: &tf_train
     <<: *vocabulary_symbol
     # Run time variables
     model_name: &model_name q2v # File name used for model checkpoints'
@@ -61,6 +62,9 @@ tf_train:
 
     # export serving model
     export_model: false # export_model model
+
+tf_inference: &tf_train
+    query_file: !!python/object/apply:os.path.join [*rawdata_dir, query_inference]
 
 tf_serving:
     host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
