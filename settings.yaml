@@ -2,7 +2,7 @@
 settings:
     # project_dir: &project_dir /home/ec2-user/q2v/v4/0803_sync
     project_dir: &project_dir /home/ec2-user/q2v/v4/0818
-    rawdata_dir: !!python/object/apply:os.path.join [*project_dir, data/rawdata]
+    rawdata_dir: &rawdata_dir !!python/object/apply:os.path.join [*project_dir, data/rawdata]
     traindata_dir: &traindata_dir !!python/object/apply:os.path.join [*project_dir, data/traindata]
     vocabulary_dir: !!python/object/apply:os.path.join [*project_dir, data/vocabulary]
     vectorization_dir: !!python/object/apply:os.path.join [*project_dir, data/vectorization]
@@ -40,6 +40,8 @@ tf_train: &tf_train
     use_residual: false # Use residual connection between layers
     optimizer: cocob # Optimizer for training: (adadelta, adam, rmsprop, cocob, adagrad)
     max_gradient_norm: 5.0 # Clip gradients to this norm.
+    seq_embed_size: -1 # Sequence output size, disable output project if seq_embed_size <= 0
+    regularized_lambda: 0 # regularization item
 
     model_export_path: !!python/object/apply:os.path.join [*project_dir, data/serving, *model_name]
     learning_rate: 0.1 # learning rate
@@ -63,14 +65,15 @@ tf_train: &tf_train
     # export serving model
     export_model: false # export_model model
 
-tf_inference: &tf_train
+tf_inference:
+    <<: *tf_train
     query_file: !!python/object/apply:os.path.join [*rawdata_dir, query_inference]
 
 tf_serving:
-    host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
+    host: 127.0.0.1  # gRPC server host
     port: 9000  # gRPC server port
     model_name: q2v # TensorFlow model name
-    model_version: 104026 # TensorFlow model version
+    model_version: -1 # TensorFlow model version
     timeout: 10.0 # Timeout of gRPC request
 
 gprc_retry:
@@ -82,7 +85,7 @@ gprc_retry:
     gprc_retry_max_sleeping: 1.0
 
 nmslib_thrift:
-    host: ec2-52-69-130-108.ap-northeast-1.compute.amazonaws.com  # gRPC server host
+    host: 127.0.0.1  # gRPC server host
     port: 10000  # gRPC server port
 
 asin_title_ardb:

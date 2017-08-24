@@ -29,6 +29,8 @@ class Q2VModel(object):
         self.num_layers = config['num_layers']
         self.cell_type = config['cell_type']
         self.hidden_units = config['hidden_units']
+        self.seq_embed_size = config['seq_embed_size']
+        self.regularized_lambda = config['regularized_lambda']
 
         self.use_dropout = config['use_dropout']
         self.keep_prob = 1.0 - config['dropout_rate']
@@ -226,6 +228,11 @@ class Q2VModel(object):
             self.src_last_output = self.extract_last_output(
                 self.src_outputs, self.src_inputs_length - 1)
 
+            if self.seq_embed_size > 0:
+                self.src_tgt_w = tf.get_variable(name='src_tgt_weights', shape=[self.hidden_units, self.seq_embed_size], initializer=tf.truncated_normal_initializer(), dtype=self.dtype)
+                self.src_tgt_b = tf.get_variable(name='src_tgt_b', shape=[self.seq_embed_size], dtype=self.dtype)
+                self.src_last_output = tf.matmul(self.src_last_output, self.src_tgt_w) + self.src_tgt_b
+
     def build_target_encoder(self, tgt_inputs, tgt_inputs_length):
         logger.info("building target encoder..")
         with tf.variable_scope('shared_encoder', dtype=self.dtype, reuse=True) as scope:
@@ -279,6 +286,8 @@ class Q2VModel(object):
 
             tgt_last_output = self.extract_last_output(
                 tgt_outputs, tgt_inputs_length - 1)
+            if self.seq_embed_size > 0:
+                tgt_last_output = tf.matmul(tgt_last_output, self.src_tgt_w) + self.src_tgt_b
             return tgt_last_output
 
     @staticmethod
@@ -310,7 +319,6 @@ class Q2VModel(object):
         return loss_mean
 
     def cos_loss(self):
-        labels = tf.cast(self.labels, self.dtype)
         # src_last_output_normalize = tf.nn.l2_normalize(self.src_last_output, dim=1)
         # tgt_last_output_normalize = tf.nn.l2_normalize(self.tgt_last_output, dim=1)
         distance = self.compute_euclidean_distance(
@@ -396,8 +404,12 @@ class Q2VModel(object):
         # logits_scaled = tf.nn.softmax(logits)
 
         # result2 = -tf.reduce_sum(self.labels * tf.log(logits_scaled), 1)
+        # TODO tune lambda_v, in our experiments, we use λ = 0 for computational simplicity
+        regularized_item = 0
+        if self.seq_embed_size > 0 and self.regularized_lambda > 0.0:
+            regularized_item = self.regularized_lambda * tf.norm(self.src_tgt_w) + self.regularized_lambda * tf.norm(self.src_tgt_b)
         cross_entropy = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.labels))
+            tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.labels)) + regularized_item
         return cross_entropy
 
     def init_loss(self):

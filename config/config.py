@@ -25,6 +25,9 @@ tf.app.flags.DEFINE_string('optimizer', tf_train['optimizer'], 'Optimizer for tr
 tf.app.flags.DEFINE_float("max_gradient_norm", tf_train['max_gradient_norm'], "Clip gradients to this norm.")
 tf.app.flags.DEFINE_string('model_name', tf_train['model_name'], 'File name used for model checkpoints')
 tf.app.flags.DEFINE_string("model_export_path", tf_train['model_export_path'], "model export path")
+tf.app.flags.DEFINE_integer('seq_embed_size', tf_train['seq_embed_size'], 'Sequence output size')
+tf.app.flags.DEFINE_float('regularized_lambda', tf_train['regularized_lambda'], 'lambda for loss regularized item')
+
 
 # For distributed
 # cluster specification

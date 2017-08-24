@@ -4,7 +4,6 @@
 from multiprocessing import Process
 import logging
 import json
-from itertools import combinations
 import zmq
 from zmq.decorators import socket
 import smart_open
@@ -20,7 +19,7 @@ class DataVentilatorProcess(Process):
     AKSIS_KEYWORDS_TYPE = ["KeywordsByPurchases", "KeywordsByAdds", "KeywordsByClicks"]
 
     def __init__(self, s3_uris, ip='127.0.0.1', port=5555, max_query_num=6, asin_tag="Asin", query_dict_min_size=1000,
-                 metric_interval=60, max_num_every_item=8, min_item_length=2, pos_number=3, neg_number=2, name='VentilatorProcess'):
+                 metric_interval=60, min_item_length=2, pos_number=3, neg_number=2, name='VentilatorProcess'):
         """Process to read the corpus data
 
         Parameters
@@ -51,7 +50,6 @@ class DataVentilatorProcess(Process):
         """
         Process.__init__(self)
         self.s3_uris = s3_uris
-        self.max_num_every_item = max_num_every_item
         self.min_item_length = min_item_length
         self.pos_number = pos_number
         self.asin_tag = asin_tag

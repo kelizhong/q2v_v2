@@ -1,3 +1,4 @@
+import os
 import argparse
 import h5py
 import numpy as np
@@ -10,13 +11,14 @@ def parse_args():
     # vocabulary parameter
     parser.add_argument('h5_file', type=str, default='q2v.h5', help='h5 file for query vector')
     parser.add_argument('-d', '--dataset', type=str, default='q2v', help='dataset name')
-    parser.add_argument('-v', '--vector-text-path', type=str, default='q2v.txt', help='query vector text')
-    parser.add_argument('-i', '--index-path', type=str, default='q2v.index', help='nms index name')
 
     return parser.parse_args()
 
 
-def create_nms_index(h5_file, dataset, vector_text_path, index_path):
+def create_nms_index(h5_file, dataset):
+    abspath = os.path.splitext((os.path.abspath(h5_file)))[0]
+    vector_text_path = "%s.txt" % abspath
+    index_path = "%s.index" % abspath
     with h5py.File(h5_file, 'r') as h5f:
         data = h5f[dataset][:]
 
@@ -34,4 +36,4 @@ def create_nms_index(h5_file, dataset, vector_text_path, index_path):
 
 if __name__ == "__main__":
     args = parse_args()
-    create_nms_index(args.h5_file, args.dataset, args.vector_text_path, args.index_path)
+    create_nms_index(args.h5_file, args.dataset)

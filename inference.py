@@ -108,13 +108,13 @@ class Inference(object):
 
         vector_dir = config('vectorization_dir')
         ensure_dir_exists(vector_dir)
-        h5_path = os.path.join(vector_dir, "%s.h5" % proj_name)
-        h5f = h5py.File(h5_path, 'w')
+        h5_path = os.path.join(vector_dir, "%s-%s.h5" % (proj_name, str(self.model.global_step.eval())))
 
-        meta_path = os.path.join(vector_dir, "%s.tsv" % proj_name)
+        meta_path = os.path.join(vector_dir, "%s-%s.tsv" % (proj_name, str(self.model.global_step.eval())))
 
         concat = self.vectorization(file, meta_path=meta_path)
-        h5f.create_dataset(proj_name, data=concat)
+        with h5py.File(h5_path, 'w') as h5f:
+            h5f.create_dataset(proj_name, data=concat)
 
     def vectorization(self, file, meta_path):
         """
@@ -141,7 +141,7 @@ class Inference(object):
                     print("Have reached to the max sequence %d" % self.max_sequences)
                     break
 
-        ensure_dir_exists(meta_path)
+        ensure_dir_exists(meta_path, is_dir=False)
         with open(meta_path, 'w+') as item_file:
             item_file.write('id\tchar\n')
             for i, each in enumerate(sources_list):
@@ -186,13 +186,13 @@ def setup_logger():
 def main(_):
     """For test"""
     setup_logger()
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+    os.environ['CUDA_VISIBLE_DEVICES'] = "6"
     tf_config = OrderedDict(sorted(FLAGS.__flags.items()))
     i = Inference(tf_config=tf_config)
     # i.visualize('./data/rawdata/query_sample_inference')
     # i.nearest("women grey nike shoes", './data/rawdata/query_inference', 10)
-    # i.nearest("Microsoft Windows 10 Home USB Flash Drive", './data/rawdata/query_inference', 50)
-    i.vectorize(tf_config['query_file'])
+    i.nearest("IDA Laboratories CANMAKE | Presto Powder| Marshmallow Finish Powder Matte Ocher SPF26 PA++ 69g", './data/rawdata/query_inference', 50)
+    # i.vectorize(config('query_file', section='tf_inference'))
 
 
 if __name__ == "__main__":

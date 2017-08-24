@@ -66,14 +66,14 @@ class NMSLB(Resource):
 
     def get(self, query):
         input = tokens_helper.tokens(query, return_data=False)
-        print(input)
+        print(query)
 
         request = make_inference_request([input])
         # Send request
         result = tf_serving_client.predict(request, request_timeout)
         result = json.loads(MessageToJson(result))
         query = result['outputs']['src_last_output']['floatVal']
-        print(" ".join(map(str, query)))
+        # print(" ".join(map(str, query)))
         res = client.find_k_nearest(100, " ".join(map(str, query)))
         res = [(meta.get(str(ele[0]), 'unknown word for %d' % ele[0]), ele[1]) for ele in res]
 
