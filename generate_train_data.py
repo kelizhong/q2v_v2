@@ -1,8 +1,8 @@
-import time
+"""
+Example call: python generate_train_data.py -sp "aksis_parse/20170730/part" 5 -w 30 -fs 20170730
+"""
 import argparse
 import logging.config
-import random
-from multiprocessing import Value
 import yaml
 import boto3
 

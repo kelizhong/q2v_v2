@@ -405,7 +405,7 @@ class Q2VModel(object):
 
         # result2 = -tf.reduce_sum(self.labels * tf.log(logits_scaled), 1)
         # TODO tune lambda_v, in our experiments, we use λ = 0 for computational simplicity
-        regularized_item = 0
+        regularized_item = 0.0
         if self.seq_embed_size > 0 and self.regularized_lambda > 0.0:
             regularized_item = self.regularized_lambda * tf.norm(self.src_tgt_w) + self.regularized_lambda * tf.norm(self.src_tgt_b)
         cross_entropy = tf.reduce_mean(

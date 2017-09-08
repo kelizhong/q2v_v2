@@ -190,8 +190,8 @@ def main(_):
     tf_config = OrderedDict(sorted(FLAGS.__flags.items()))
     i = Inference(tf_config=tf_config)
     # i.visualize('./data/rawdata/query_sample_inference')
-    # i.nearest("women grey nike shoes", './data/rawdata/query_inference', 10)
-    i.nearest("IDA Laboratories CANMAKE | Presto Powder| Marshmallow Finish Powder Matte Ocher SPF26 PA++ 69g", './data/rawdata/query_inference', 50)
+    i.nearest("women grey nike shoes", './data/rawdata/query_inference', 10)
+    # i.nearest("IDA Laboratories CANMAKE | Presto Powder| Marshmallow Finish Powder Matte Ocher SPF26 PA++ 69g", './data/rawdata/query_inference', 50)
     # i.vectorize(config('query_file', section='tf_inference'))
 
 

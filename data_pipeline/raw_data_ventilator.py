@@ -2,6 +2,7 @@
 # pylint: disable=too-many-instance-attributes, too-many-arguments
 """ventilator that read/produce the corpus data"""
 from multiprocessing import Process
+import sys
 import logging
 import json
 import zmq
@@ -17,9 +18,10 @@ logger = logging.getLogger(__name__)
 class DataVentilatorProcess(Process):
 
     AKSIS_KEYWORDS_TYPE = ["KeywordsByPurchases", "KeywordsByAdds", "KeywordsByClicks"]
+    AKSIS_KEYWORDS_OPTIONAL_TYPE = ["KeywordsBySearches"]
 
     def __init__(self, s3_uris, ip='127.0.0.1', port=5555, max_query_num=6, asin_tag="Asin", query_dict_min_size=1000,
-                 metric_interval=60, min_item_length=2, pos_number=3, neg_number=2, name='VentilatorProcess'):
+                 metric_interval=60, min_item_length=2, max_item_length=sys.maxsize, pos_number=3, neg_number=2, name='VentilatorProcess'):
         """Process to read the corpus data
 
         Parameters
@@ -51,6 +53,7 @@ class DataVentilatorProcess(Process):
         Process.__init__(self)
         self.s3_uris = s3_uris
         self.min_item_length = min_item_length
+        self.max_item_length = max_item_length
         self.pos_number = pos_number
         self.asin_tag = asin_tag
         self.query_dict_min_size = query_dict_min_size
@@ -78,7 +81,7 @@ class DataVentilatorProcess(Process):
             for query, _ in queries:
                 if len(query.split()) > self.min_item_length:
                     rd.setdefault(query)
-            if len(rd) < self.query_dict_min_size:
+            if len(rd) < self.query_dict_min_size or len(queries) == 0:
                 continue
             for nu, comb_item in enumerate(nslice(queries, self.pos_number, truncate=True)):
                 data_item = list()
@@ -95,7 +98,15 @@ class DataVentilatorProcess(Process):
                 metric.notify(1)
 
     def extract_queries(self, data):
-        queries = [(item['keywords'], item['count']) for field in self.AKSIS_KEYWORDS_TYPE for item in data[field] if len(item['keywords'].split()) >= self.min_item_length]
+        queries = [(item['keywords'], item['count']) for field in self.AKSIS_KEYWORDS_TYPE for item in data[field] if self.min_item_length <= len(item['keywords'].split()) <= self.max_item_length]
+        if len(queries) < len(self.AKSIS_KEYWORDS_TYPE):
+            return []
+        for field in self.AKSIS_KEYWORDS_OPTIONAL_TYPE:
+            for item in data[field]:
+                if len(queries) >= self.pos_number:
+                    return queries
+                if self.min_item_length <= len(item['keywords'].split()) <= self.max_item_length:
+                    queries.append((item['keywords'], item['count']))
         return queries
 
     def get_s3_data_stream(self):

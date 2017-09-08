@@ -4,6 +4,7 @@
 from multiprocessing import Process
 import logging
 import unicodedata
+import re
 import pickle
 # pylint: disable=ungrouped-imports
 import zmq
@@ -32,13 +33,14 @@ class DataParserWorker(Process):
             Port for the outbound traffic
     """
 
-    def __init__(self, ip='127.0.0.1', frontend_port=5556, backend_port=5557, asin_title_tag="item_name", name="DataWorkerProcess"):
+    def __init__(self, ip='127.0.0.1', frontend_port=5556, backend_port=5557, asin_title_tag="item_name", gl_tag="gl", name="DataWorkerProcess"):
         Process.__init__(self)
         # pylint: disable=invalid-name
         self.ip = ip
         self.frontend_port = frontend_port
         self.backend_port = backend_port
         self.asin_title_tag = asin_title_tag
+        self.gl_tag = gl_tag
         self.name = name
 
     # pylint: disable=no-member
@@ -54,12 +56,19 @@ class DataParserWorker(Process):
         tokenizer = TextBlobTokenizerHelper()
         pool = redis.ConnectionPool(host=config('host', section="asin_title_ardb"), port=config('port', section="asin_title_ardb"))
         r = redis.Redis(connection_pool=pool)
+        # remove GL
+        # gl_book gl_music gl_video gl_video_games gl_dvd gl_ebooks gl_audible gl_magazine
+        # gl_digital_video_download gl_digital_music_service gl_digital_book_service gl_digital_music_purchase
+        # gl_digital_ebook_purchase gl_digital_video_games gl_video_membership gl_digital_video_subscription
+        # gl_prime_video_subscription gl_amazon_video_subscription
 
         def _on_recv(msg):
             try:
                 data_item = pickle.loads(msg[0])
-                title = r.hmget(data_item[0], self.asin_title_tag)[0]
-                if title:
+                res = r.hmget(data_item[0], self.asin_title_tag, self.gl_tag)
+                title = res[0]
+                gl = res[1]
+                if title and gl and not re.search("book|video|music|audible|magazine|dvd", bytes.decode(gl), flags=re.IGNORECASE):
                     # remove \x \u
                     data_item[0] = unicodedata.normalize("NFKD", title.decode('unicode-escape'))
                     parsed_data = map(lambda data: data if is_number(data) else ' '.join(tokenizer.tokenize(data)), data_item)

@@ -7,6 +7,7 @@ import itertools
 from utils.config_decouple import config
 from utils.retry_util import retry
 from utils.appmetric_util import AppMetric
+from utils.file_util import ensure_dir_exists
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class DataCollectorProcess(object):
 
     def _init_writer_handler(self):
         raw_file_path = os.path.join(config('rawdata_dir'), "train_data_raw_{}".format(self.file_suffix))
+        ensure_dir_exists(raw_file_path, is_dir=False)
         self.raw_handler = open(raw_file_path, mode='w', encoding="utf-8")
         parsed_file_path = os.path.join(config('rawdata_dir'), "train_data_parsed_{}".format(self.file_suffix))
         self.parsed_handler = open(parsed_file_path, mode='w', encoding="utf-8")

@@ -1,7 +1,7 @@
 ---
 settings:
     # project_dir: &project_dir /home/ec2-user/q2v/v4/0803_sync
-    project_dir: &project_dir /home/ec2-user/q2v/v4/0818
+    project_dir: &project_dir /media/data/q2v/0905
     rawdata_dir: &rawdata_dir !!python/object/apply:os.path.join [*project_dir, data/rawdata]
     traindata_dir: &traindata_dir !!python/object/apply:os.path.join [*project_dir, data/traindata]
     vocabulary_dir: !!python/object/apply:os.path.join [*project_dir, data/vocabulary]
